@@ -1,0 +1,1546 @@
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useApp } from "../../context/AppContext";
+import type {
+  Teacher,
+  Notice,
+  SuccessStory,
+  Course,
+  GalleryItem,
+  Application,
+} from "../../context/AppContext";
+import { supabase, uploadPhoto, TEACHER_BUCKET } from "../../lib/supabase";
+import { projectId } from "../../../utils/supabase/info";
+
+type Tab =
+  | "overview"
+  | "applications"
+  | "teachers"
+  | "courses"
+  | "notices"
+  | "stories"
+  | "gallery"
+  | "stats"
+  | "settings";
+
+const tabs: { id: Tab; label: string; icon: string }[] = [
+  { id: "overview", label: "ড্যাশবোর্ড", icon: "📊" },
+  { id: "applications", label: "আবেদন", icon: "📋" },
+  { id: "teachers", label: "শিক্ষক", icon: "👨‍🏫" },
+  { id: "courses", label: "কোর্স", icon: "📚" },
+  { id: "notices", label: "নোটিশ", icon: "📢" },
+  { id: "stories", label: "সাফল্য", icon: "🏆" },
+  { id: "gallery", label: "গ্যালারি", icon: "🖼️" },
+  { id: "stats", label: "পরিসংখ্যান", icon: "📈" },
+  { id: "settings", label: "সেটিংস", icon: "⚙️" },
+];
+
+// ─── Shared helpers ──────────────────────────────────────────────────────────
+
+const inp: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 12px",
+  border: "1.5px solid #d1fae5",
+  borderRadius: 8,
+  fontFamily: "'Hind Siliguri', sans-serif",
+  fontSize: "0.88rem",
+  background: "white",
+  outline: "none",
+  boxSizing: "border-box",
+  marginBottom: 12,
+};
+
+function Msg({ msg }: { msg: { type: "ok" | "err"; text: string } | null }) {
+  if (!msg) return null;
+  return (
+    <div
+      style={{
+        padding: "10px 14px",
+        borderRadius: 8,
+        marginBottom: 16,
+        fontSize: "0.84rem",
+        background: msg.type === "ok" ? "#dcfce7" : "#fef2f2",
+        color: msg.type === "ok" ? "#166534" : "#dc2626",
+        border: `1px solid ${msg.type === "ok" ? "#bbf7d0" : "#fecaca"}`,
+      }}
+    >
+      {msg.type === "ok" ? "✅ " : "⚠️ "}
+      {msg.text}
+    </div>
+  );
+}
+
+function PhotoUploadInput({
+  current,
+  onUrl,
+  folder,
+  bucket,
+}: {
+  current: string;
+  onUrl: (url: string) => void;
+  folder: string;
+  bucket: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError("");
+    const { url, error } = await uploadPhoto(file, folder, bucket);
+    if (error) {
+      setUploadError("Upload failed: " + error);
+    } else if (url) {
+      onUrl(url);
+    }
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  return (
+    <div>
+      <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>
+        ছবির URL অথবা ফাইল আপলোড
+      </label>
+      <input
+        style={inp}
+        type="url"
+        value={current}
+        onChange={(e) => onUrl(e.target.value)}
+        placeholder="https://... অথবা নিচে ফাইল আপলোড করুন"
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            background: "#f0fdf4",
+            border: "1.5px solid #bbf7d0",
+            borderRadius: 7,
+            cursor: "pointer",
+            fontSize: "0.82rem",
+            color: "#166534",
+            fontWeight: 600,
+          }}
+        >
+          📁 ফাইল বেছে নিন
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+        </label>
+        {uploading && <span style={{ color: "#6b7280", fontSize: "0.8rem" }}>আপলোড হচ্ছে…</span>}
+        {current && !uploading && (
+          <img
+            src={current}
+            alt="preview"
+            style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", border: "1px solid #dcfce7" }}
+          />
+        )}
+      </div>
+      {uploadError && <div style={{ color: "#dc2626", fontSize: "0.78rem", marginBottom: 8 }}>⚠️ {uploadError}</div>}
+    </div>
+  );
+}
+
+// ─── Overview ────────────────────────────────────────────────────────────────
+
+function Overview() {
+  const { applications, teachers, notices, dbReady } = useApp();
+  const total = applications.length;
+  const pending = applications.filter((a) => a.status === "pending").length;
+  const confirmed = applications.filter((a) => a.status === "confirmed").length;
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.4rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>
+        ড্যাশবোর্ড ওভারভিউ
+      </h2>
+
+      {!dbReady && (
+        <div
+          style={{
+            background: "#fff7ed",
+            border: "1.5px solid #fed7aa",
+            borderRadius: 12,
+            padding: "16px 20px",
+            marginBottom: 24,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: "#9a3412", marginBottom: 6 }}>⚠️ ডেটাবেস সেটআপ প্রয়োজন</div>
+          <p style={{ color: "#c2410c", fontSize: "0.88rem", lineHeight: 1.7, margin: 0 }}>
+            Supabase ডেটাবেস টেবিল এখনও তৈরি হয়নি। নিচের "ডেটাবেস সেটআপ" বিভাগ দেখুন অথবা
+            Supabase Dashboard → SQL Editor-এ SQL স্ক্রিপ্ট রান করুন।
+          </p>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20, marginBottom: 28 }} className="dash-stats">
+        {[
+          { label: "মোট আবেদন", value: total, color: "#166534", bg: "#f0fdf4" },
+          { label: "অপেক্ষমান", value: pending, color: "#b45309", bg: "#fffbeb" },
+          { label: "নিশ্চিত", value: confirmed, color: "#166534", bg: "#dcfce7" },
+          { label: "শিক্ষক", value: teachers.length, color: "#1e40af", bg: "#eff6ff" },
+        ].map((s) => (
+          <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: "20px", border: "1.5px solid", borderColor: s.bg }}>
+            <div style={{ fontSize: "2rem", fontWeight: 700, color: s.color, fontFamily: "Lora, serif" }}>{s.value}</div>
+            <div style={{ color: "#6b7280", fontSize: "0.85rem", marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }} className="dash-info">
+        {[
+          { label: "প্রকাশিত নোটিশ", value: notices.length, icon: "📢" },
+          { label: "গুরুত্বপূর্ণ নোটিশ", value: notices.filter((n) => n.important).length, icon: "⚠️" },
+          { label: "মোট শিক্ষার্থী আবেদন", value: total, icon: "📝" },
+        ].map((s) => (
+          <div key={s.label} style={{ background: "white", border: "1.5px solid #dcfce7", borderRadius: 12, padding: "20px", display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ fontSize: "2rem" }}>{s.icon}</div>
+            <div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#14532d", fontFamily: "Lora, serif" }}>{s.value}</div>
+              <div style={{ color: "#6b7280", fontSize: "0.82rem" }}>{s.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @media(max-width:900px){.dash-stats{grid-template-columns:repeat(2,1fr)!important;}.dash-info{grid-template-columns:1fr!important;}}
+      `}</style>
+    </div>
+  );
+}
+
+// ─── Applications ─────────────────────────────────────────────────────────────
+
+function Applications() {
+  const { applications, refreshApplications } = useApp();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const filtered = applications.filter((a) => {
+    const matchSearch =
+      a.studentName.toLowerCase().includes(search.toLowerCase()) ||
+      a.refNumber.toLowerCase().includes(search.toLowerCase()) ||
+      a.mobile.includes(search);
+    const matchStatus = statusFilter === "all" || a.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const updateStatus = async (id: string, status: Application["status"]) => {
+    setUpdating(id);
+    const { error } = await supabase
+      .from("cuh_applications")
+      .update({ status })
+      .eq("id", id);
+    if (error) {
+      setMsg({ type: "err", text: "স্ট্যাটাস পরিবর্তন ব্যর্থ: " + error.message });
+    } else {
+      await refreshApplications();
+    }
+    setUpdating(null);
+  };
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 16 }}>
+        ভর্তি আবেদনসমূহ
+      </h2>
+      <Msg msg={msg} />
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <input
+          className="form-input"
+          style={{ maxWidth: 300, marginBottom: 0 }}
+          placeholder="নাম, রেফারেন্স, বা মোবাইল"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="form-input"
+          style={{ maxWidth: 200, marginBottom: 0 }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="all">সব স্ট্যাটাস</option>
+          <option value="pending">Pending</option>
+          <option value="contacted">Contacted</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button
+          onClick={refreshApplications}
+          style={{ padding: "8px 16px", border: "1.5px solid #dcfce7", background: "white", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: "0.84rem" }}
+        >
+          🔄 রিফ্রেশ
+        </button>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: "60px 0" }}>কোনো আবেদন পাওয়া যায়নি।</div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+            <thead>
+              <tr style={{ background: "#f0fdf4", borderBottom: "2px solid #dcfce7" }}>
+                {["রেফারেন্স", "নাম", "মোবাইল", "ব্যাচ", "তারিখ", "স্ট্যাটাস", "পরিবর্তন করুন"].map((h) => (
+                  <th key={h} style={{ padding: "11px 14px", textAlign: "left", color: "#14532d", fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a) => (
+                <tr
+                  key={a.id}
+                  style={{ borderBottom: "1px solid #f0fdf4", opacity: updating === a.id ? 0.6 : 1 }}
+                >
+                  <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#166534", fontWeight: 700, fontSize: "0.8rem" }}>
+                    {a.refNumber}
+                  </td>
+                  <td style={{ padding: "11px 14px" }}>
+                    <div style={{ fontWeight: 600, color: "#14532d" }}>{a.studentName}</div>
+                    <div style={{ color: "#9ca3af", fontSize: "0.74rem" }}>{a.institution}</div>
+                  </td>
+                  <td style={{ padding: "11px 14px", color: "#374151" }}>{a.mobile}</td>
+                  <td style={{ padding: "11px 14px", color: "#374151", maxWidth: 160 }}>
+                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.batch}</div>
+                  </td>
+                  <td style={{ padding: "11px 14px", color: "#9ca3af", fontSize: "0.78rem" }}>{a.submittedAt}</td>
+                  <td style={{ padding: "11px 14px" }}>
+                    <span
+                      className={`status-badge status-${a.status}`}
+                    >
+                      {a.status === "pending"
+                        ? "অপেক্ষমান"
+                        : a.status === "contacted"
+                        ? "যোগাযোগ করা হয়েছে"
+                        : a.status === "confirmed"
+                        ? "নিশ্চিত"
+                        : "বাতিল"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "11px 14px" }}>
+                    <select
+                      value={a.status}
+                      disabled={updating === a.id}
+                      onChange={(e) => updateStatus(a.id, e.target.value as Application["status"])}
+                      style={{
+                        padding: "5px 8px",
+                        border: "1px solid #dcfce7",
+                        borderRadius: 6,
+                        fontSize: "0.78rem",
+                        cursor: "pointer",
+                        background: "white",
+                        color: "#374151",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Teachers ─────────────────────────────────────────────────────────────────
+
+type TeacherForm = {
+  id: string;
+  name: string;
+  designation: string;
+  subject: string;
+  qualification: string;
+  experience: string;
+  bio: string;
+  photo_url: string;
+  serial_number: string;
+};
+
+function TeachersTab() {
+  const { teachers, refreshTeachers } = useApp();
+  const [editing, setEditing] = useState<TeacherForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const blankForm = (): TeacherForm => ({
+    id: "",
+    name: "",
+    designation: "",
+    subject: "",
+    qualification: "",
+    experience: "",
+    bio: "",
+    photo_url: "",
+    serial_number: "",
+  });
+
+  const startAdd = () => setEditing(blankForm());
+  const startEdit = (t: Teacher) =>
+    setEditing({
+      id: t.id,
+      name: t.name,
+      designation: t.designation,
+      subject: t.subject,
+      qualification: t.qualification,
+      experience: t.experience,
+      bio: t.bio,
+      photo_url: t.photo,
+      serial_number: t.serialNumber != null ? String(t.serialNumber) : "",
+    });
+
+  const save = async () => {
+    if (!editing?.name.trim()) return;
+    setSaving(true);
+    setMsg(null);
+
+    const payload = {
+      name: editing.name,
+      designation: editing.designation,
+      subject: editing.subject,
+      qualification: editing.qualification,
+      experience: editing.experience,
+      bio: editing.bio,
+      photo_url: editing.photo_url,
+      image_url: editing.photo_url, // keep both columns in sync for backwards compatibility
+      serial_number: editing.serial_number !== "" ? Number(editing.serial_number) : null,
+    };
+
+    let error;
+    if (editing.id) {
+      ({ error } = await supabase.from("cuh_teachers").update(payload).eq("id", editing.id));
+    } else {
+      ({ error } = await supabase.from("cuh_teachers").insert(payload));
+    }
+
+    if (error) {
+      setMsg({ type: "err", text: "সংরক্ষণ ব্যর্থ: " + error.message });
+    } else {
+      setMsg({ type: "ok", text: "শিক্ষকের তথ্য সংরক্ষিত হয়েছে।" });
+      await refreshTeachers();
+      setEditing(null);
+    }
+    setSaving(false);
+  };
+
+  const del = async (id: string, name: string) => {
+    if (!confirm(`"${name}" কে মুছে ফেলতে চান?`)) return;
+    const { error } = await supabase.from("cuh_teachers").delete().eq("id", id);
+    if (error) {
+      setMsg({ type: "err", text: "মুছতে ব্যর্থ: " + error.message });
+    } else {
+      setMsg({ type: "ok", text: "শিক্ষক মুছে ফেলা হয়েছে।" });
+      await refreshTeachers();
+    }
+  };
+
+  const set = (k: keyof TeacherForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setEditing((f) => f && { ...f, [k]: e.target.value });
+
+  if (editing !== null) {
+    return (
+      <div>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>
+          {editing.id ? "শিক্ষক সম্পাদনা" : "নতুন শিক্ষক যোগ করুন"}
+        </h2>
+        <Msg msg={msg} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }} className="form-grid">
+          {[
+            ["নাম *", "name"],
+            ["পদবী", "designation"],
+            ["বিষয়", "subject"],
+            ["শিক্ষাগত যোগ্যতা", "qualification"],
+            ["অভিজ্ঞতা", "experience"],
+          ].map(([label, key]) => (
+            <div key={key}>
+              <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>{label}</label>
+              <input style={inp} value={(editing as Record<string, string>)[key]} onChange={set(key as keyof TeacherForm)} />
+            </div>
+          ))}
+          <div>
+            <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>ক্রমিক নম্বর</label>
+            <input
+              style={inp}
+              type="number"
+              placeholder="যেমন: 1"
+              value={editing.serial_number}
+              onChange={(e) => setEditing((f) => f && { ...f, serial_number: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>
+          সংক্ষিপ্ত পরিচিতি
+        </label>
+        <textarea
+          style={{ ...inp, height: 80, resize: "vertical" }}
+          value={editing.bio}
+          onChange={set("bio")}
+        />
+
+        <PhotoUploadInput
+          current={editing.photo_url}
+          onUrl={(url) => setEditing((f) => f && { ...f, photo_url: url })}
+          folder="teachers"
+          bucket={TEACHER_BUCKET}
+        />
+
+        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="btn-primary"
+            style={{ opacity: saving ? 0.7 : 1 }}
+          >
+            {saving ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+          </button>
+          <button
+            onClick={() => { setEditing(null); setMsg(null); }}
+            style={{ padding: "10px 20px", border: "1.5px solid #dcfce7", background: "white", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            বাতিল
+          </button>
+        </div>
+        <style>{`@media(max-width:640px){.form-grid{grid-template-columns:1fr!important;}}`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700 }}>শিক্ষকমণ্ডলী</h2>
+        <button onClick={startAdd} className="btn-primary">+ নতুন শিক্ষক</button>
+      </div>
+      <Msg msg={msg} />
+      {teachers.length === 0 && (
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: "40px 0" }}>কোনো শিক্ষক নেই। যোগ করুন।</div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {teachers.map((t) => (
+          <div key={t.id} style={{ background: "white", border: "1.5px solid #dcfce7", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: t.serialNumber != null ? "#dcfce7" : "#f3f4f6",
+              border: "1.5px solid " + (t.serialNumber != null ? "#bbf7d0" : "#e5e7eb"),
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 700, fontSize: "0.8rem",
+              color: t.serialNumber != null ? "#166534" : "#9ca3af",
+            }}>
+              {t.serialNumber != null ? t.serialNumber : "—"}
+            </div>
+            <img
+              src={t.photo || "https://placehold.co/56x56/dcfce7/166534?text=T"}
+              alt={t.name}
+              style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: "#14532d" }}>{t.name}</div>
+              <div style={{ color: "#166534", fontSize: "0.82rem" }}>
+                {t.subject} — {t.designation}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => startEdit(t)}
+                style={{ padding: "6px 14px", border: "1px solid #dcfce7", background: "white", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit" }}
+              >
+                সম্পাদনা
+              </button>
+              <button
+                onClick={() => del(t.id, t.name)}
+                style={{ padding: "6px 14px", border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", color: "#dc2626", fontFamily: "inherit" }}
+              >
+                মুছুন
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Courses ──────────────────────────────────────────────────────────────────
+
+type CourseForm = {
+  id: string;
+  name: string;
+  classes: string;
+  schedule: string;
+  admission_fee: string;
+  monthly_fee: string;
+  term: string;
+  start_date: string;
+  timing: string;
+};
+
+const COURSES_SETUP_SQL = `-- Run once in: Supabase Dashboard → SQL Editor → New query
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS public.cuh_courses (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name          TEXT        NOT NULL DEFAULT '',
+  classes       TEXT        NOT NULL DEFAULT '',
+  schedule      TEXT        NOT NULL DEFAULT '',
+  admission_fee TEXT        NOT NULL DEFAULT '',
+  monthly_fee   TEXT        NOT NULL DEFAULT '',
+  term          TEXT        NOT NULL DEFAULT '',
+  start_date    TEXT        NOT NULL DEFAULT '',
+  timing        TEXT        NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.cuh_courses ENABLE ROW LEVEL SECURITY;
+
+DO $do$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='cuh_courses' AND policyname='public_read_courses') THEN
+    EXECUTE 'CREATE POLICY "public_read_courses" ON public.cuh_courses FOR SELECT USING (TRUE)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='cuh_courses' AND policyname='auth_all_courses') THEN
+    EXECUTE 'CREATE POLICY "auth_all_courses" ON public.cuh_courses FOR ALL USING (auth.uid() IS NOT NULL)';
+  END IF;
+END $do$;
+
+NOTIFY pgrst, 'reload schema';`;
+
+function CoursesTab() {
+  const { courses, refreshCourses } = useApp();
+  const [editing, setEditing] = useState<CourseForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Probe the table on mount to detect missing-table error immediately.
+  useEffect(() => {
+    supabase
+      .from("cuh_courses")
+      .select("id", { count: "exact", head: true })
+      .then(({ error }) => {
+        if (error && (error.message.includes("schema cache") || error.message.includes("does not exist"))) {
+          setTableError(error.message);
+        } else {
+          setTableError(null);
+        }
+      });
+  }, []);
+
+  const handleCopySQL = () => {
+    navigator.clipboard.writeText(COURSES_SETUP_SQL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleRetry = async () => {
+    setTableError(null);
+    await refreshCourses();
+    // Re-probe
+    const { error } = await supabase.from("cuh_courses").select("id", { count: "exact", head: true });
+    if (error && (error.message.includes("schema cache") || error.message.includes("does not exist"))) {
+      setTableError(error.message);
+    }
+  };
+
+  // Show setup panel when table doesn't exist
+  if (tableError) {
+    return (
+      <div>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>কোর্সসমূহ</h2>
+        <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 12, padding: "20px 24px", marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, color: "#9a3412", marginBottom: 8 }}>⚠️ cuh_courses টেবিল তৈরি হয়নি</div>
+          <p style={{ color: "#c2410c", fontSize: "0.88rem", lineHeight: 1.7, margin: "0 0 16px" }}>
+            নিচের SQL টি <strong>Supabase Dashboard → SQL Editor → New query</strong>-তে paste করে Run করুন। তারপর "পুনরায় চেষ্টা করুন" বাটনে ক্লিক করুন।
+          </p>
+          <div style={{ position: "relative" }}>
+            <pre style={{
+              background: "#1e293b", color: "#e2e8f0", fontSize: "0.75rem", lineHeight: 1.7,
+              padding: "16px", borderRadius: 8, overflowX: "auto", margin: 0,
+              fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all",
+            }}>
+              {COURSES_SETUP_SQL}
+            </pre>
+            <button
+              onClick={handleCopySQL}
+              style={{
+                position: "absolute", top: 8, right: 8,
+                padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+                background: copied ? "#166534" : "#475569", color: "white",
+                fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit",
+              }}
+            >
+              {copied ? "✓ Copied!" : "Copy SQL"}
+            </button>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <button onClick={handleRetry} className="btn-primary">🔄 পুনরায় চেষ্টা করুন</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const blankForm = (): CourseForm => ({ id: "", name: "", classes: "", schedule: "", admission_fee: "", monthly_fee: "", term: "", start_date: "", timing: "" });
+  const toForm = (c: Course): CourseForm => ({ id: c.id, name: c.name, classes: c.classes, schedule: c.schedule, admission_fee: c.admissionFee, monthly_fee: c.monthlyFee, term: c.term, start_date: c.startDate, timing: c.timing });
+
+  const save = async () => {
+    if (!editing?.name.trim()) return;
+    setSaving(true);
+    setMsg(null);
+    const payload = { name: editing.name, classes: editing.classes, schedule: editing.schedule, admission_fee: editing.admission_fee, monthly_fee: editing.monthly_fee, term: editing.term, start_date: editing.start_date, timing: editing.timing };
+    let error;
+    if (editing.id) {
+      ({ error } = await supabase.from("cuh_courses").update(payload).eq("id", editing.id));
+    } else {
+      ({ error } = await supabase.from("cuh_courses").insert(payload));
+    }
+    if (error) {
+      setMsg({ type: "err", text: "সংরক্ষণ ব্যর্থ: " + error.message });
+    } else {
+      setMsg({ type: "ok", text: "কোর্স সংরক্ষিত হয়েছে।" });
+      await refreshCourses();
+      setEditing(null);
+    }
+    setSaving(false);
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("কোর্সটি মুছবেন?")) return;
+    const { error } = await supabase.from("cuh_courses").delete().eq("id", id);
+    if (error) setMsg({ type: "err", text: error.message });
+    else { setMsg({ type: "ok", text: "কোর্স মুছে ফেলা হয়েছে।" }); await refreshCourses(); }
+  };
+
+  const set = (k: keyof CourseForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setEditing((f) => f && { ...f, [k]: e.target.value });
+
+  if (editing !== null) {
+    const fields: [string, keyof CourseForm][] = [["কোর্সের নাম *", "name"], ["শ্রেণি", "classes"], ["সময়সূচি", "schedule"], ["ভর্তি ফি", "admission_fee"], ["মাসিক বেতন", "monthly_fee"], ["মেয়াদ", "term"], ["শুরুর তারিখ", "start_date"], ["ক্লাসের সময়", "timing"]];
+    return (
+      <div>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>
+          {editing.id ? "কোর্স সম্পাদনা" : "নতুন কোর্স"}
+        </h2>
+        <Msg msg={msg} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }} className="form-grid">
+          {fields.map(([label, key]) => (
+            <div key={key}>
+              <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>{label}</label>
+              <input style={inp} value={editing[key]} onChange={set(key)} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          <button onClick={save} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1 }}>
+            {saving ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+          </button>
+          <button onClick={() => { setEditing(null); setMsg(null); }} style={{ padding: "10px 20px", border: "1.5px solid #dcfce7", background: "white", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
+            বাতিল
+          </button>
+        </div>
+        <style>{`@media(max-width:640px){.form-grid{grid-template-columns:1fr!important;}}`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700 }}>কোর্সসমূহ</h2>
+        <button onClick={() => setEditing(blankForm())} className="btn-primary">+ নতুন কোর্স</button>
+      </div>
+      <Msg msg={msg} />
+      {courses.map((c) => (
+        <div key={c.id} style={{ background: "white", border: "1.5px solid #dcfce7", borderRadius: 12, padding: "14px 18px", marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, color: "#14532d", marginBottom: 4 }}>{c.name}</div>
+              <div style={{ color: "#6b7280", fontSize: "0.82rem" }}>
+                {c.timing} | {c.admissionFee} ভর্তি ফি | {c.monthlyFee}/মাস
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button onClick={() => setEditing(toForm(c))} style={{ padding: "5px 12px", border: "1px solid #dcfce7", background: "white", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit" }}>সম্পাদনা</button>
+              <button onClick={() => del(c.id)} style={{ padding: "5px 12px", border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", color: "#dc2626", fontFamily: "inherit" }}>মুছুন</button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Notices ──────────────────────────────────────────────────────────────────
+
+type NoticeForm = { id: string; title: string; content: string; date: string; important: boolean };
+
+function NoticesTab() {
+  const { notices, refreshNotices } = useApp();
+  const [editing, setEditing] = useState<NoticeForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const blank = (): NoticeForm => ({ id: "", title: "", content: "", date: new Date().toISOString().split("T")[0], important: false });
+
+  const save = async () => {
+    if (!editing?.title.trim()) return;
+    setSaving(true);
+    setMsg(null);
+    const payload = { title: editing.title, content: editing.content, date: editing.date, important: editing.important };
+    let error;
+    if (editing.id) {
+      ({ error } = await supabase.from("cuh_notices").update(payload).eq("id", editing.id));
+    } else {
+      ({ error } = await supabase.from("cuh_notices").insert(payload));
+    }
+    if (error) setMsg({ type: "err", text: "সংরক্ষণ ব্যর্থ: " + error.message });
+    else { setMsg({ type: "ok", text: "নোটিশ সংরক্ষিত হয়েছে।" }); await refreshNotices(); setEditing(null); }
+    setSaving(false);
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("নোটিশটি মুছবেন?")) return;
+    const { error } = await supabase.from("cuh_notices").delete().eq("id", id);
+    if (error) setMsg({ type: "err", text: error.message });
+    else { setMsg({ type: "ok", text: "নোটিশ মুছে ফেলা হয়েছে।" }); await refreshNotices(); }
+  };
+
+  if (editing !== null) {
+    return (
+      <div>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>
+          {editing.id ? "নোটিশ সম্পাদনা" : "নতুন নোটিশ"}
+        </h2>
+        <Msg msg={msg} />
+        <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>শিরোনাম *</label>
+        <input style={inp} value={editing.title} onChange={(e) => setEditing((f) => f && { ...f, title: e.target.value })} />
+        <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>বিষয়বস্তু</label>
+        <textarea style={{ ...inp, height: 100, resize: "vertical" }} value={editing.content} onChange={(e) => setEditing((f) => f && { ...f, content: e.target.value })} />
+        <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>তারিখ</label>
+        <input type="date" style={inp} value={editing.date} onChange={(e) => setEditing((f) => f && { ...f, date: e.target.value })} />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 20 }}>
+          <input type="checkbox" checked={editing.important} onChange={(e) => setEditing((f) => f && { ...f, important: e.target.checked })} />
+          <span style={{ fontSize: "0.88rem", color: "#374151", fontWeight: 500 }}>গুরুত্বপূর্ণ নোটিশ হিসেবে চিহ্নিত করুন</span>
+        </label>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button onClick={save} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1 }}>
+            {saving ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+          </button>
+          <button onClick={() => { setEditing(null); setMsg(null); }} style={{ padding: "10px 20px", border: "1.5px solid #dcfce7", background: "white", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
+            বাতিল
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700 }}>নোটিশসমূহ</h2>
+        <button onClick={() => setEditing(blank())} className="btn-primary">+ নতুন নোটিশ</button>
+      </div>
+      <Msg msg={msg} />
+      {notices.map((n) => (
+        <div key={n.id} style={{ background: "white", border: `1.5px solid ${n.important ? "#fde68a" : "#dcfce7"}`, borderLeft: `4px solid ${n.important ? "#f59e0b" : "#166534"}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: "#14532d", marginBottom: 4 }}>{n.title}</div>
+              <div style={{ color: "#6b7280", fontSize: "0.82rem" }}>{n.content.slice(0, 100)}{n.content.length > 100 ? "…" : ""}</div>
+              <div style={{ color: "#9ca3af", fontSize: "0.76rem", marginTop: 4 }}>{n.date}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button onClick={() => setEditing({ id: n.id, title: n.title, content: n.content, date: n.date, important: n.important })} style={{ padding: "5px 12px", border: "1px solid #dcfce7", background: "white", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit" }}>সম্পাদনা</button>
+              <button onClick={() => del(n.id)} style={{ padding: "5px 12px", border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", color: "#dc2626", fontFamily: "inherit" }}>মুছুন</button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Success Stories ──────────────────────────────────────────────────────────
+
+type StoryForm = { id: string; name: string; institution: string; exam: string; result: string; batch: string; testimonial: string; photo_url: string };
+
+function StoriesTab() {
+  const { successStories, refreshSuccessStories } = useApp();
+  const [editing, setEditing] = useState<StoryForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const blank = (): StoryForm => ({ id: "", name: "", institution: "", exam: "", result: "", batch: "", testimonial: "", photo_url: "" });
+  const toForm = (s: SuccessStory): StoryForm => ({ id: s.id, name: s.name, institution: s.institution, exam: s.exam, result: s.result, batch: s.batch, testimonial: s.testimonial, photo_url: s.photo });
+
+  const save = async () => {
+    if (!editing?.name.trim()) return;
+    setSaving(true);
+    setMsg(null);
+    const payload = { name: editing.name, institution: editing.institution, exam: editing.exam, result: editing.result, batch: editing.batch, testimonial: editing.testimonial, photo_url: editing.photo_url };
+    let error;
+    if (editing.id) {
+      ({ error } = await supabase.from("cuh_success_stories").update(payload).eq("id", editing.id));
+    } else {
+      ({ error } = await supabase.from("cuh_success_stories").insert(payload));
+    }
+    if (error) setMsg({ type: "err", text: "সংরক্ষণ ব্যর্থ: " + error.message });
+    else { setMsg({ type: "ok", text: "সফলভাবে সংরক্ষিত হয়েছে।" }); await refreshSuccessStories(); setEditing(null); }
+    setSaving(false);
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("মুছবেন?")) return;
+    const { error } = await supabase.from("cuh_success_stories").delete().eq("id", id);
+    if (error) setMsg({ type: "err", text: error.message });
+    else { setMsg({ type: "ok", text: "মুছে ফেলা হয়েছে।" }); await refreshSuccessStories(); }
+  };
+
+  const set = (k: keyof StoryForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setEditing((f) => f && { ...f, [k]: e.target.value });
+
+  if (editing !== null) {
+    return (
+      <div>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>
+          {editing.id ? "সাফল্যের গল্প সম্পাদনা" : "নতুন সাফল্যের গল্প"}
+        </h2>
+        <Msg msg={msg} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }} className="form-grid">
+          {[["নাম *", "name"], ["প্রতিষ্ঠান", "institution"], ["পরীক্ষা", "exam"], ["ফলাফল", "result"], ["ব্যাচ", "batch"]].map(([label, key]) => (
+            <div key={key}>
+              <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>{label}</label>
+              <input style={inp} value={(editing as Record<string, string>)[key]} onChange={set(key as keyof StoryForm)} />
+            </div>
+          ))}
+        </div>
+        <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>প্রশংসাপত্র</label>
+        <textarea style={{ ...inp, height: 80, resize: "vertical" }} value={editing.testimonial} onChange={set("testimonial")} />
+        <PhotoUploadInput current={editing.photo_url} onUrl={(url) => setEditing((f) => f && { ...f, photo_url: url })} folder="stories" bucket={TEACHER_BUCKET} />
+        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          <button onClick={save} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1 }}>
+            {saving ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+          </button>
+          <button onClick={() => { setEditing(null); setMsg(null); }} style={{ padding: "10px 20px", border: "1.5px solid #dcfce7", background: "white", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>বাতিল</button>
+        </div>
+        <style>{`@media(max-width:640px){.form-grid{grid-template-columns:1fr!important;}}`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700 }}>সাফল্যের গল্পসমূহ</h2>
+        <button onClick={() => setEditing(blank())} className="btn-primary">+ নতুন গল্প</button>
+      </div>
+      <Msg msg={msg} />
+      {successStories.map((s) => (
+        <div key={s.id} style={{ background: "white", border: "1.5px solid #dcfce7", borderRadius: 12, padding: "14px 18px", marginBottom: 10, display: "flex", gap: 14, alignItems: "center" }}>
+          <img src={s.photo || "https://placehold.co/48x48/dcfce7/166534?text=S"} alt={s.name} style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, color: "#14532d" }}>{s.name}</div>
+            <div style={{ color: "#6b7280", fontSize: "0.8rem" }}>{s.exam} | {s.result} | {s.institution}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setEditing(toForm(s))} style={{ padding: "5px 12px", border: "1px solid #dcfce7", background: "white", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit" }}>সম্পাদনা</button>
+            <button onClick={() => del(s.id)} style={{ padding: "5px 12px", border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", color: "#dc2626", fontFamily: "inherit" }}>মুছুন</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Gallery ──────────────────────────────────────────────────────────────────
+
+const GALLERY_SETUP_SQL = `-- Run once in Supabase Dashboard → SQL Editor → New query
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS public.cuh_gallery (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  url        TEXT        NOT NULL DEFAULT '',
+  caption    TEXT        NOT NULL DEFAULT '',
+  category   TEXT        NOT NULL DEFAULT 'সাধারণ',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.cuh_gallery ENABLE ROW LEVEL SECURITY;
+
+DO $do$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='cuh_gallery' AND policyname='public_read_gallery') THEN
+    EXECUTE 'CREATE POLICY "public_read_gallery" ON public.cuh_gallery FOR SELECT USING (TRUE)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='cuh_gallery' AND policyname='auth_all_gallery') THEN
+    EXECUTE 'CREATE POLICY "auth_all_gallery" ON public.cuh_gallery FOR ALL USING (auth.uid() IS NOT NULL)';
+  END IF;
+END $do$;
+
+-- Storage bucket policies for gallery-images
+-- Allows authenticated admins to upload and delete; public can read.
+DO $do$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+    AND policyname = 'gallery_images_insert'
+  ) THEN
+    EXECUTE $p$
+      CREATE POLICY "gallery_images_insert" ON storage.objects
+      FOR INSERT TO authenticated
+      WITH CHECK (bucket_id = 'gallery-images')
+    $p$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+    AND policyname = 'gallery_images_select'
+  ) THEN
+    EXECUTE $p$
+      CREATE POLICY "gallery_images_select" ON storage.objects
+      FOR SELECT USING (bucket_id = 'gallery-images')
+    $p$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+    AND policyname = 'gallery_images_delete'
+  ) THEN
+    EXECUTE $p$
+      CREATE POLICY "gallery_images_delete" ON storage.objects
+      FOR DELETE TO authenticated
+      USING (bucket_id = 'gallery-images')
+    $p$;
+  END IF;
+END $do$;
+
+NOTIFY pgrst, 'reload schema';`;
+
+function GalleryTab() {
+  const { gallery, refreshGallery, isAdminLoggedIn } = useApp();
+  const [form, setForm] = useState({ url: "", caption: "", category: "" });
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    supabase.from("cuh_gallery").select("id", { count: "exact", head: true }).then(({ error }) => {
+      if (error && (error.message.includes("schema cache") || error.message.includes("does not exist"))) {
+        setTableError(error.message);
+      } else {
+        setTableError(null);
+      }
+    });
+  }, []);
+
+  const add = async () => {
+    if (!form.url.trim()) return;
+    setSaving(true);
+    const { error } = await supabase.from("cuh_gallery").insert({ url: form.url, caption: form.caption, category: form.category || "সাধারণ" });
+    if (error) setMsg({ type: "err", text: error.message });
+    else { setMsg({ type: "ok", text: "ছবি যোগ করা হয়েছে।" }); await refreshGallery(); setForm({ url: "", caption: "", category: "" }); }
+    setSaving(false);
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("মুছবেন?")) return;
+    const { error } = await supabase.from("cuh_gallery").delete().eq("id", id);
+    if (error) setMsg({ type: "err", text: error.message });
+    else { setMsg({ type: "ok", text: "মুছে ফেলা হয়েছে।" }); await refreshGallery(); }
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Verify session before upload — Storage RLS requires authenticated JWT.
+    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !session) {
+      setMsg({ type: "err", text: "আপলোড করতে Admin Panel-এ লগইন করুন। অথবা পেজ রিফ্রেশ করে আবার লগইন করুন।" });
+      e.target.value = "";
+      return;
+    }
+
+    // Refresh to ensure the access token sent to Storage is current.
+    await supabase.auth.refreshSession();
+
+    setUploading(true);
+    setMsg(null);
+
+    // Build a unique path inside the gallery-images bucket.
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `gallery/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Upload directly — bucket is the literal "gallery-images", no indirection.
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("gallery-images")
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || "application/octet-stream",
+      });
+
+    if (uploadError) {
+      console.error("[GalleryTab] upload error:", uploadError.message);
+      setMsg({ type: "err", text: `আপলোড ব্যর্থ: ${uploadError.message}` });
+      setUploading(false);
+      e.target.value = "";
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from("gallery-images")
+      .getPublicUrl(uploadData.path);
+
+    const caption = form.caption.trim() || file.name.replace(/\.[^.]+$/, "");
+    const category = form.category.trim() || "সাধারণ";
+
+    const { error: insertError } = await supabase
+      .from("cuh_gallery")
+      .insert({ url: publicUrl, caption, category });
+
+    if (insertError) {
+      setMsg({ type: "err", text: `ছবি আপলোড হয়েছে কিন্তু রেকর্ড সংরক্ষণ ব্যর্থ: ${insertError.message}` });
+    } else {
+      setMsg({ type: "ok", text: "ছবি আপলোড ও সংরক্ষণ সফল হয়েছে।" });
+      await refreshGallery();
+      setForm({ url: "", caption: "", category: "" });
+    }
+
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  if (tableError) {
+    return (
+      <div>
+        <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>গ্যালারি</h2>
+        <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 12, padding: "20px 24px", marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, color: "#9a3412", marginBottom: 8 }}>⚠️ cuh_gallery টেবিল তৈরি হয়নি</div>
+          <p style={{ color: "#c2410c", fontSize: "0.88rem", lineHeight: 1.7, margin: "0 0 16px" }}>
+            নিচের SQL টি <strong>Supabase Dashboard → SQL Editor → New query</strong>-তে paste করে Run করুন। তারপর "পুনরায় চেষ্টা করুন" বাটনে ক্লিক করুন।
+          </p>
+          <div style={{ position: "relative" }}>
+            <pre style={{ background: "#1e293b", color: "#e2e8f0", fontSize: "0.75rem", lineHeight: 1.7, padding: "16px", borderRadius: 8, overflowX: "auto", margin: 0, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+              {GALLERY_SETUP_SQL}
+            </pre>
+            <button
+              onClick={() => { navigator.clipboard.writeText(GALLERY_SETUP_SQL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }); }}
+              style={{ position: "absolute", top: 8, right: 8, padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", background: copied ? "#166534" : "#475569", color: "white", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}
+            >
+              {copied ? "✓ Copied!" : "Copy SQL"}
+            </button>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <button onClick={async () => { setTableError(null); await refreshGallery(); const { error } = await supabase.from("cuh_gallery").select("id", { count: "exact", head: true }); if (error && (error.message.includes("schema cache") || error.message.includes("does not exist"))) setTableError(error.message); }} className="btn-primary">
+              🔄 পুনরায় চেষ্টা করুন
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const sinp = { padding: "7px 10px", border: "1.5px solid #d1fae5", borderRadius: 6, fontFamily: "inherit", fontSize: "0.85rem", background: "white", outline: "none", flex: 1 } as React.CSSProperties;
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 16 }}>গ্যালারি</h2>
+      {/* Storage policy setup — run once to allow authenticated uploads to gallery-images bucket */}
+      <details style={{ marginBottom: 16, background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 10, padding: "10px 14px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "0.84rem", color: "#166534" }}>
+          ⚙️ Storage Policy Setup SQL (run once if upload fails with RLS error)
+        </summary>
+        <div style={{ position: "relative", marginTop: 10 }}>
+          <pre style={{ background: "#1e293b", color: "#e2e8f0", fontSize: "0.72rem", lineHeight: 1.6, padding: "14px", borderRadius: 8, overflowX: "auto", margin: 0, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+            {GALLERY_SETUP_SQL}
+          </pre>
+          <button
+            onClick={() => { navigator.clipboard.writeText(GALLERY_SETUP_SQL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }); }}
+            style={{ position: "absolute", top: 8, right: 8, padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer", background: copied ? "#166534" : "#475569", color: "white", fontSize: "0.72rem", fontWeight: 600, fontFamily: "inherit" }}
+          >
+            {copied ? "✓ Copied!" : "Copy SQL"}
+          </button>
+        </div>
+      </details>
+      <Msg msg={msg} />
+      <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <input style={sinp} placeholder="ছবির URL" value={form.url} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} />
+        <input style={{ ...sinp, minWidth: 130 }} placeholder="ক্যাপশন" value={form.caption} onChange={(e) => setForm((f) => ({ ...f, caption: e.target.value }))} />
+        <input style={{ ...sinp, minWidth: 110 }} placeholder="ক্যাটাগরি" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
+        <button onClick={add} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1, whiteSpace: "nowrap" }}>
+          {saving ? "যোগ হচ্ছে…" : "+ যোগ করুন"}
+        </button>
+      </div>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 7, cursor: "pointer", fontSize: "0.82rem", color: "#166534", fontWeight: 600, marginBottom: 20 }}>
+        📁 ফাইল আপলোড করুন
+        <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+        {uploading && <span style={{ color: "#6b7280" }}>আপলোড হচ্ছে…</span>}
+      </label>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }} className="gall-grid">
+        {gallery.map((g) => (
+          <div key={g.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", boxShadow: "0 2px 8px rgba(22,101,52,0.08)" }}>
+            <img src={g.url || undefined} alt={g.caption} style={{ width: "100%", height: 120, objectFit: "cover", display: "block", background: "#dcfce7" }} />
+            <div style={{ padding: "8px 10px", background: "white" }}>
+              <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "#14532d" }}>{g.caption}</div>
+              <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{g.category}</div>
+            </div>
+            <button
+              onClick={() => del(g.id)}
+              style={{ position: "absolute", top: 6, right: 6, background: "rgba(220,38,38,0.9)", color: "white", border: "none", borderRadius: 6, width: 24, height: 24, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <style>{`@media(max-width:768px){.gall-grid{grid-template-columns:repeat(2,1fr)!important;}}`}</style>
+    </div>
+  );
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+function StatsTab() {
+  const { stats, refreshStats } = useApp();
+  const [form, setForm] = useState(stats);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase.from("cuh_stats").upsert({
+      id: 1,
+      success_rate: form.successRate,
+      total_students: form.totalStudents,
+      a_plus: form.aPlus,
+      teachers_count: form.teachers,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) setMsg({ type: "err", text: "সংরক্ষণ ব্যর্থ: " + error.message });
+    else { setMsg({ type: "ok", text: "পরিসংখ্যান সংরক্ষিত হয়েছে।" }); await refreshStats(); }
+    setSaving(false);
+  };
+
+  const si = { ...inp, marginBottom: 0 } as React.CSSProperties;
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>পরিসংখ্যান সম্পাদনা</h2>
+      <Msg msg={msg} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 560, marginBottom: 24 }}>
+        {(
+          [
+            ["সাফল্যের হার (%)", "successRate"],
+            ["মোট শিক্ষার্থী", "totalStudents"],
+            ["A+ অর্জন", "aPlus"],
+            ["শিক্ষক সংখ্যা", "teachers"],
+          ] as [string, keyof typeof form][]
+        ).map(([label, key]) => (
+          <div key={key}>
+            <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>{label}</label>
+            <input type="number" style={si} value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+          </div>
+        ))}
+      </div>
+      <button onClick={save} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1 }}>
+        {saving ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+function SettingsTab() {
+  const { settings, refreshSettings } = useApp();
+  const [form, setForm] = useState(settings);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [uploadingInst, setUploadingInst] = useState(false);
+  const [uploadingHome, setUploadingHome] = useState(false);
+
+  // Sync form when settings load from Supabase
+  useState(() => { setForm(settings); });
+
+  const uploadInstitutionImage = async (file: File) => {
+    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !session) { setMsg({ type: "err", text: "আপলোড করতে লগইন করুন।" }); return; }
+    await supabase.auth.refreshSession();
+    setUploadingInst(true);
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `institution-hero/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    console.log("[SETTINGS IMAGE UPLOAD]", { bucket: "gallery-images", folder: "institution-hero", path, project: projectId });
+    const { data, error } = await supabase.storage
+      .from("gallery-images")
+      .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type || "application/octet-stream" });
+    setUploadingInst(false);
+    if (error) { console.error("[Settings Upload] institution error:", error.message); setMsg({ type: "err", text: "আপলোড ব্যর্থ: " + error.message }); return; }
+    const { data: { publicUrl } } = supabase.storage.from("gallery-images").getPublicUrl(data.path);
+    setForm((p) => ({ ...p, institutionHeroImageUrl: publicUrl }));
+  };
+
+  const uploadHomeHeroImage = async (file: File) => {
+    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !session) { setMsg({ type: "err", text: "আপলোড করতে লগইন করুন।" }); return; }
+    await supabase.auth.refreshSession();
+    setUploadingHome(true);
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `home-hero/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    console.log("[SETTINGS IMAGE UPLOAD]", { bucket: "gallery-images", folder: "home-hero", path, project: projectId });
+    const { data, error } = await supabase.storage
+      .from("gallery-images")
+      .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type || "application/octet-stream" });
+    setUploadingHome(false);
+    if (error) { console.error("[Settings Upload] home-hero error:", error.message); setMsg({ type: "err", text: "আপলোড ব্যর্থ: " + error.message }); return; }
+    const { data: { publicUrl } } = supabase.storage.from("gallery-images").getPublicUrl(data.path);
+    setForm((p) => ({ ...p, homeHeroImageUrl: publicUrl }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase.from("cuh_settings").upsert({
+      id: 1,
+      map_embed_url: form.mapEmbedUrl,
+      address: form.address,
+      phone: form.phone,
+      whatsapp: form.whatsapp,
+      email: form.email,
+      facebook: form.facebook,
+      opening_hours: form.openingHours,
+      institution_hero_image_url: form.institutionHeroImageUrl,
+      home_hero_image_url: form.homeHeroImageUrl,
+      home_admission_text: form.homeAdmissionText,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) setMsg({ type: "err", text: "সংরক্ষণ ব্যর্থ: " + error.message });
+    else { setMsg({ type: "ok", text: "সেটিংস সংরক্ষিত হয়েছে।" }); await refreshSettings(); }
+    setSaving(false);
+  };
+
+  const si = { ...inp, marginBottom: 0 } as React.CSSProperties;
+  const fields: [string, keyof typeof form][] = [
+    ["ঠিকানা", "address"],
+    ["ফোন নম্বর", "phone"],
+    ["WhatsApp নম্বর", "whatsapp"],
+    ["ইমেইল", "email"],
+    ["Facebook লিংক", "facebook"],
+    ["খোলার সময়", "openingHours"],
+  ];
+
+  const imgPreview = (url: string) => url ? (
+    <img src={url} alt="preview" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, marginBottom: 8, border: "1.5px solid #d1fae5" }} />
+  ) : (
+    <div style={{ width: "100%", height: 80, background: "#f0fdf4", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: "0.8rem", marginBottom: 8, border: "1.5px dashed #bbf7d0" }}>
+      কোনো ছবি নেই
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.3rem", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>সাইট সেটিংস</h2>
+      <Msg msg={msg} />
+      <div style={{ maxWidth: 640 }}>
+
+        {/* ── cuh-photo bucket policy SQL ──────────────────── */}
+        <details style={{ marginBottom: 16, background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 10, padding: "10px 14px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "0.84rem", color: "#9a3412" }}>
+            ⚙️ cuh-photo Storage Policy SQL — আপলোড কাজ না করলে একবার Run করুন
+          </summary>
+          <pre style={{ background: "#1e293b", color: "#e2e8f0", fontSize: "0.72rem", lineHeight: 1.6, padding: "14px", borderRadius: 8, overflowX: "auto", margin: "10px 0 0", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{`-- Run once in Supabase Dashboard → SQL Editor → New query
+DO $do$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='cuh_photo_insert') THEN
+    EXECUTE $p$CREATE POLICY "cuh_photo_insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'cuh-photo')$p$;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='cuh_photo_select') THEN
+    EXECUTE $p$CREATE POLICY "cuh_photo_select" ON storage.objects FOR SELECT USING (bucket_id = 'cuh-photo')$p$;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='cuh_photo_delete') THEN
+    EXECUTE $p$CREATE POLICY "cuh_photo_delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'cuh-photo')$p$;
+  END IF;
+END $do$;`}</pre>
+        </details>
+
+        {/* ── Content section ─────────────────────────────── */}
+        <div style={{ background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 12, padding: "18px 20px", marginBottom: 24 }}>
+          <h3 style={{ fontFamily: "Lora, serif", fontSize: "1rem", color: "#14532d", fontWeight: 700, marginBottom: 16 }}>হোমপেজ ও প্রতিষ্ঠান কনটেন্ট</h3>
+
+          {/* A: Institution hero image */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>প্রতিষ্ঠানের ছবি (About পেজ)</label>
+            {imgPreview(form.institutionHeroImageUrl)}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "white", border: "1.5px solid #bbf7d0", borderRadius: 7, cursor: "pointer", fontSize: "0.82rem", color: "#166534", fontWeight: 600 }}>
+                📁 {uploadingInst ? "আপলোড হচ্ছে…" : "ছবি বেছে নিন"}
+                <input type="file" accept="image/*" style={{ display: "none" }} disabled={uploadingInst}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadInstitutionImage(f); e.target.value = ""; }} />
+              </label>
+              {form.institutionHeroImageUrl && (
+                <input style={{ ...si, flex: 1, minWidth: 0 }} value={form.institutionHeroImageUrl}
+                  onChange={(e) => setForm((p) => ({ ...p, institutionHeroImageUrl: e.target.value }))} placeholder="অথবা URL দিন" />
+              )}
+            </div>
+          </div>
+
+          {/* B: Home hero image */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>হোমপেজ Hero ছবি (পটভূমি)</label>
+            {imgPreview(form.homeHeroImageUrl)}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "white", border: "1.5px solid #bbf7d0", borderRadius: 7, cursor: "pointer", fontSize: "0.82rem", color: "#166534", fontWeight: 600 }}>
+                📁 {uploadingHome ? "আপলোড হচ্ছে…" : "ছবি বেছে নিন"}
+                <input type="file" accept="image/*" style={{ display: "none" }} disabled={uploadingHome}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadHomeHeroImage(f); e.target.value = ""; }} />
+              </label>
+              {form.homeHeroImageUrl && (
+                <input style={{ ...si, flex: 1, minWidth: 0 }} value={form.homeHeroImageUrl}
+                  onChange={(e) => setForm((p) => ({ ...p, homeHeroImageUrl: e.target.value }))} placeholder="অথবা URL দিন" />
+              )}
+            </div>
+          </div>
+
+          {/* C: Admission text */}
+          <div>
+            <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>ভর্তি চলছে টেক্সট (হোমপেজ)</label>
+            <input style={si} value={form.homeAdmissionText}
+              onChange={(e) => setForm((p) => ({ ...p, homeAdmissionText: e.target.value }))}
+              placeholder="✦ ভর্তি চলছে — ২০২৮ শিক্ষাবর্ষ" />
+            <div style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: 4 }}>উদাহরণ: ✦ ভর্তি চলছে — ২০২৯ শিক্ষাবর্ষ</div>
+          </div>
+        </div>
+
+        {/* ── Contact & site fields ────────────────────────── */}
+        {fields.map(([label, key]) => (
+          <div key={key} style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>{label}</label>
+            <input style={si} value={form[key] as string} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+          </div>
+        ))}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>Google Maps Embed URL</label>
+          <textarea style={{ ...si, height: 80, resize: "vertical" }} value={form.mapEmbedUrl} onChange={(e) => setForm((f) => ({ ...f, mapEmbedUrl: e.target.value }))} />
+        </div>
+        <button onClick={save} disabled={saving} className="btn-primary" style={{ opacity: saving ? 0.7 : 1 }}>
+          {saving ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard shell ──────────────────────────────────────────────────────────
+
+export default function AdminDashboard() {
+  const { isAdminLoggedIn, adminLogout, session } = useApp();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+
+  useEffect(() => {
+    if (!isAdminLoggedIn) navigate("/admin");
+  }, [isAdminLoggedIn, navigate]);
+
+  const handleLogout = async () => {
+    await adminLogout();
+    navigate("/admin");
+  };
+
+  const renderTab = () => {
+    switch (activeTab) {
+      case "overview": return <Overview />;
+      case "applications": return <Applications />;
+      case "teachers": return <TeachersTab />;
+      case "courses": return <CoursesTab />;
+      case "notices": return <NoticesTab />;
+      case "stories": return <StoriesTab />;
+      case "gallery": return <GalleryTab />;
+      case "stats": return <StatsTab />;
+      case "settings": return <SettingsTab />;
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Hind Siliguri', sans-serif", background: "#f8fafb" }}>
+      {/* Sidebar */}
+      <div className="admin-sidebar" style={{ display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
+        <div style={{ padding: "20px 16px 12px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontFamily: "Lora, serif" }}>C</div>
+            <div>
+              <div style={{ color: "white", fontWeight: 700, fontSize: "0.85rem" }}>Admin Panel</div>
+              <div style={{ color: "#86efac", fontSize: "0.68rem" }}>Commerce Unique Home</div>
+            </div>
+          </div>
+          {session?.user?.email && (
+            <div style={{ color: "#86efac", fontSize: "0.7rem", marginTop: 6, wordBreak: "break-all" }}>
+              {session.user.email}
+            </div>
+          )}
+        </div>
+
+        <nav style={{ padding: "10px 0", flex: 1 }}>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`admin-nav-item ${activeTab === t.id ? "active" : ""}`}
+              style={{ width: "100%", border: "none", background: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ padding: "16px" }}>
+          <button
+            onClick={handleLogout}
+            style={{ width: "100%", padding: "10px", background: "rgba(255,255,255,0.1)", color: "#bbf7d0", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: "0.85rem", fontWeight: 500 }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.2)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
+          >
+            🚪 লগআউট
+          </button>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, overflow: "auto" }}>
+        <div style={{ background: "white", borderBottom: "1px solid #e5e7eb", padding: "14px 28px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 }}>
+          <h1 style={{ fontFamily: "Lora, serif", fontSize: "1.1rem", color: "#14532d", fontWeight: 700 }}>
+            {tabs.find((t) => t.id === activeTab)?.label}
+          </h1>
+          <a href="/#/" target="_blank" rel="noopener noreferrer" style={{ color: "#166534", fontSize: "0.84rem", fontWeight: 600, textDecoration: "none" }}>
+            ↗ সাইট দেখুন
+          </a>
+        </div>
+        <div style={{ padding: "28px" }}>{renderTab()}</div>
+      </div>
+    </div>
+  );
+}

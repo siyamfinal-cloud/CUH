@@ -1,0 +1,19 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+// Suppress the GoTrueClient multi-instance warning produced when Figma Make's
+// own Supabase client coexists with ours. The warning is cosmetic — our client
+// uses a unique storageKey ("cuh-supabase-auth") so there is no real collision.
+const _origWarn = console.warn.bind(console);
+console.warn = (...args: unknown[]) => {
+  if (typeof args[0] === "string" && args[0].includes("Multiple GoTrueClient instances")) return;
+  _origWarn(...args);
+};
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)

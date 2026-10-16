@@ -1,0 +1,307 @@
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: #166534;
+  --color-primary-dark: #14532d;
+  --color-primary-light: #22c55e;
+  --color-accent: #16a34a;
+  --color-accent-light: #bbf7d0;
+  --color-surface: #f0fdf4;
+  --color-card: #ffffff;
+  --color-text: #14532d;
+  --color-muted: #6b7280;
+  --font-sans: 'Hind Siliguri', sans-serif;
+  --font-serif: 'Lora', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Hind Siliguri', sans-serif;
+  background: #f0fdf4;
+  color: #1c1c1c;
+  margin: 0;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f0fdf4;
+}
+::-webkit-scrollbar-thumb {
+  background: #86efac;
+  border-radius: 3px;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes countUp {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.6s ease forwards;
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #14532d 0%, #166534 40%, #15803d 70%, #16a34a 100%);
+}
+
+.card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(22, 101, 52, 0.15);
+}
+
+.btn-primary {
+  background: #166534;
+  color: white;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary:hover {
+  background: #14532d;
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  color: white;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  border: 2px solid rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-outline:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: white;
+}
+
+.btn-white {
+  background: white;
+  color: #166534;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-white:hover {
+  background: #f0fdf4;
+  transform: translateY(-1px);
+}
+
+.section-title {
+  font-family: 'Lora', serif;
+  font-size: clamp(1.6rem, 4vw, 2.5rem);
+  font-weight: 700;
+  color: #14532d;
+  line-height: 1.25;
+}
+
+.section-subtitle {
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.7;
+  max-width: 600px;
+}
+
+.green-badge {
+  display: inline-block;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 100px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  color: #374151;
+  font-weight: 500;
+  font-size: 0.92rem;
+  text-decoration: none;
+  padding: 6px 2px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.nav-link:hover, .nav-link.active {
+  color: #166534;
+  border-bottom-color: #166534;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #d1fae5;
+  border-radius: 8px;
+  font-family: 'Hind Siliguri', sans-serif;
+  font-size: 0.95rem;
+  background: white;
+  color: #1c1c1c;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.form-input:focus {
+  border-color: #166534;
+  box-shadow: 0 0 0 3px rgba(22,101,52,0.1);
+}
+
+.stat-card {
+  background: white;
+  border-radius: 16px;
+  padding: 28px 24px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(22,101,52,0.08);
+  border: 1px solid #dcfce7;
+}
+
+.teacher-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(22,101,52,0.08);
+  border: 1px solid #dcfce7;
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+.teacher-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(22,101,52,0.15);
+}
+
+.notice-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border-left: 4px solid #166534;
+  box-shadow: 0 2px 12px rgba(22,101,52,0.06);
+  transition: box-shadow 0.2s;
+}
+.notice-card:hover {
+  box-shadow: 0 6px 24px rgba(22,101,52,0.12);
+}
+
+.gallery-item {
+  overflow: hidden;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+}
+.gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+.gallery-item:hover img {
+  transform: scale(1.08);
+}
+.gallery-item .overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(22,101,52,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.gallery-item:hover .overlay {
+  opacity: 1;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.admin-sidebar {
+  background: #14532d;
+  min-height: 100vh;
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  color: #bbf7d0;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 2px 8px;
+  transition: background 0.2s, color 0.2s;
+  text-decoration: none;
+  font-weight: 500;
+}
+.admin-nav-item:hover, .admin-nav-item.active {
+  background: rgba(255,255,255,0.12);
+  color: white;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.status-pending { background: #fef9c3; color: #854d0e; }
+.status-contacted { background: #dbeafe; color: #1e40af; }
+.status-confirmed { background: #dcfce7; color: #166534; }
+.status-rejected { background: #fee2e2; color: #991b1b; }
+
+@media (max-width: 768px) {
+  .admin-sidebar {
+    width: 100%;
+    min-height: auto;
+  }
+}

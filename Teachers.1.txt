@@ -1,0 +1,154 @@
+import { useState } from "react";
+import { useApp, type Teacher } from "../context/AppContext";
+
+function TeacherModal({ teacher, onClose }: { teacher: Teacher; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "white",
+          borderRadius: 20,
+          maxWidth: 560,
+          width: "90%",
+          overflow: "hidden",
+          boxShadow: "0 32px 80px rgba(0,0,0,0.3)",
+        }}
+      >
+        <div style={{ background: "linear-gradient(135deg, #14532d, #16a34a)", padding: "32px", display: "flex", gap: 24, alignItems: "flex-start" }}>
+          <img
+            src={teacher.photo}
+            alt={teacher.name}
+            style={{ width: 100, height: 100, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,0.3)", flexShrink: 0 }}
+          />
+          <div style={{ color: "white" }}>
+            <h2 style={{ fontFamily: "Lora, serif", fontWeight: 700, fontSize: "1.3rem", margin: "0 0 6px" }}>{teacher.name}</h2>
+            <div style={{ color: "#86efac", fontWeight: 600, fontSize: "0.9rem", marginBottom: 4 }}>{teacher.designation}</div>
+            <div style={{ background: "rgba(255,255,255,0.15)", display: "inline-block", padding: "4px 12px", borderRadius: 100, fontSize: "0.8rem", color: "#bbf7d0" }}>
+              {teacher.subject}
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: "28px 32px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+            {[
+              ["🎓 যোগ্যতা", teacher.qualification],
+              ["⏱️ অভিজ্ঞতা", teacher.experience],
+            ].map(([k, v]) => (
+              <div key={k} style={{ background: "#f0fdf4", border: "1px solid #dcfce7", borderRadius: 10, padding: "12px 16px" }}>
+                <div style={{ fontWeight: 700, color: "#14532d", fontSize: "0.78rem", marginBottom: 4 }}>{k}</div>
+                <div style={{ color: "#374151", fontSize: "0.85rem" }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: "#f9fafb", borderRadius: 10, padding: "16px", marginBottom: 20, borderLeft: "3px solid #166534" }}>
+            <div style={{ fontWeight: 700, color: "#14532d", fontSize: "0.82rem", marginBottom: 8 }}>সংক্ষিপ্ত পরিচিতি</div>
+            <p style={{ color: "#6b7280", fontSize: "0.88rem", lineHeight: 1.8, margin: 0 }}>{teacher.bio}</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: "100%", padding: "12px", background: "#166534", color: "white",
+              border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700,
+              fontFamily: "inherit", fontSize: "0.95rem",
+              transition: "background 0.2s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#14532d")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#166534")}
+          >
+            বন্ধ করুন
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Teachers() {
+  const { teachers } = useApp();
+  const [selected, setSelected] = useState<Teacher | null>(null);
+
+  return (
+    <div style={{ paddingTop: 64 }}>
+      {/* Header */}
+      <div style={{ background: "linear-gradient(135deg, #14532d, #166534)", padding: "64px 20px 80px" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
+          <span style={{ display: "inline-block", background: "rgba(187,247,208,0.2)", color: "#86efac", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 14 }}>
+            আমাদের দল
+          </span>
+          <h1 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.8rem, 5vw, 2.8rem)", color: "white", fontWeight: 700, marginBottom: 16 }}>
+            শিক্ষকমণ্ডলী
+          </h1>
+          <p style={{ color: "#a7f3d0", fontSize: "0.95rem", lineHeight: 1.8 }}>
+            আমাদের অভিজ্ঞ ও নিবেদিতপ্রাণ শিক্ষকরা শিক্ষার্থীদের সাফল্যের পথে সার্বক্ষণিক গাইড করেন।
+          </p>
+        </div>
+      </div>
+
+      <section style={{ maxWidth: 1200, margin: "0 auto", padding: "60px 20px 80px" }}>
+        {teachers.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#9ca3af", padding: "80px 20px" }}>
+            কোনো শিক্ষক তথ্য পাওয়া যায়নি।
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }} className="teachers-grid">
+            {teachers.map(t => (
+              <div
+                key={t.id}
+                className="teacher-card"
+                onClick={() => setSelected(t)}
+                style={{ cursor: "pointer" }}
+              >
+                <div style={{ position: "relative", height: 200, background: "#f0fdf4", overflow: "hidden" }}>
+                  <img
+                    src={t.photo}
+                    alt={t.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", transition: "transform 0.4s" }}
+                    onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.08)")}
+                    onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                  />
+                  <div style={{
+                    position: "absolute", bottom: 0, left: 0, right: 0,
+                    background: "linear-gradient(transparent, rgba(20,83,45,0.8))",
+                    padding: "20px 0 12px",
+                  }} />
+                </div>
+                <div style={{ padding: "20px" }}>
+                  <h3 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1rem", marginBottom: 6 }}>{t.name}</h3>
+                  <div style={{ color: "#16a34a", fontWeight: 600, fontSize: "0.8rem", marginBottom: 6 }}>{t.subject}</div>
+                  <div style={{ color: "#9ca3af", fontSize: "0.75rem", marginBottom: 12 }}>{t.designation}</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ background: "#f0fdf4", color: "#166534", fontSize: "0.72rem", fontWeight: 600, padding: "3px 8px", borderRadius: 100 }}>
+                      {t.experience} অভিজ্ঞতা
+                    </span>
+                  </div>
+                  <button
+                    style={{
+                      width: "100%", marginTop: 14, padding: "8px",
+                      background: "transparent", border: "1.5px solid #dcfce7",
+                      borderRadius: 8, cursor: "pointer", color: "#166534",
+                      fontWeight: 600, fontSize: "0.82rem", fontFamily: "inherit",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#166534"; e.currentTarget.style.color = "white"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#166534"; }}
+                  >
+                    বিস্তারিত দেখুন
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {selected && <TeacherModal teacher={selected} onClose={() => setSelected(null)} />}
+
+      <style>{`
+        @media(max-width:1024px){.teachers-grid{grid-template-columns:repeat(3,1fr)!important;}}
+        @media(max-width:768px){.teachers-grid{grid-template-columns:repeat(2,1fr)!important;}}
+        @media(max-width:480px){.teachers-grid{grid-template-columns:1fr!important;}}
+      `}</style>
+    </div>
+  );
+}

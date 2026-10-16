@@ -1,0 +1,324 @@
+import { Link } from "react-router-dom";
+import { useApp } from "../context/AppContext";
+import { useEffect, useRef, useState } from "react";
+
+const features = [
+  { icon: "👨‍🏫", title: "অভিজ্ঞ শিক্ষকমণ্ডলী", desc: "বিশ্ববিদ্যালয় থেকে উচ্চতর ডিগ্রিধারী এবং দীর্ঘ অভিজ্ঞতাসম্পন্ন শিক্ষকরা পাঠদান করেন।" },
+  { icon: "📝", title: "নিয়মিত পরীক্ষা ও মূল্যায়ন", desc: "প্রতি মাসে মডেল টেস্ট ও সাপ্তাহিক কুইজের মাধ্যমে শিক্ষার্থীদের অগ্রগতি যাচাই করা হয়।" },
+  { icon: "🎯", title: "ব্যক্তিগত যত্ন ও গাইডলাইন", desc: "প্রতিটি শিক্ষার্থীর দুর্বলতা চিহ্নিত করে ব্যক্তিগত পরামর্শ ও বিশেষ সহায়তা প্রদান।" },
+  { icon: "🏫", title: "মানসম্মত ক্লাস পরিবেশ", desc: "আধুনিক ক্লাসরুম, ডিজিটাল শিক্ষাপদ্ধতি ও উন্নত শিক্ষা উপকরণ ব্যবহার।" },
+  { icon: "👪", title: "অভিভাবক যোগাযোগ", desc: "নিয়মিত অভিভাবক সভা ও সরাসরি যোগাযোগের মাধ্যমে সন্তানের অগ্রগতি জানানো হয়।" },
+  { icon: "🏆", title: "ফলাফলের ধারাবাহিকতা", desc: "প্রতি বছর ৯৫%+ সাফল্যের হার এবং A+ অর্জনকারী শিক্ষার্থীর সংখ্যা ক্রমাগত বাড়ছে।" },
+];
+
+function useCountUp(target: number, duration = 1800, started: boolean) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!started) return;
+    let start = 0;
+    const increment = target / (duration / 16);
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(start));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [started, target, duration]);
+  return count;
+}
+
+function StatsSection() {
+  const { stats } = useApp();
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const sr = useCountUp(parseInt(stats.successRate) || 95, 1600, visible);
+  const ts = useCountUp(parseInt(stats.totalStudents) || 500, 1800, visible);
+  const ap = useCountUp(parseInt(stats.aPlus) || 100, 1600, visible);
+  const tc = useCountUp(parseInt(stats.teachers) || 15, 1200, visible);
+
+  return (
+    <div ref={ref} style={{ background: "linear-gradient(135deg, #14532d, #166534)", padding: "60px 20px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 24 }} className="stats-grid">
+        {[
+          { value: sr + "%", label: "সাফল্যের হার" },
+          { value: ts + "+", label: "সফল শিক্ষার্থী" },
+          { value: ap + "+", label: "A+ অর্জন" },
+          { value: tc + "+", label: "অভিজ্ঞ শিক্ষক" },
+        ].map(s => (
+          <div key={s.label} style={{ textAlign: "center" }}>
+            <div style={{ fontFamily: "Lora, serif", fontSize: "clamp(2rem, 5vw, 3rem)", fontWeight: 700, color: "#86efac" }}>
+              {s.value}
+            </div>
+            <div style={{ color: "#bbf7d0", fontSize: "0.95rem", marginTop: 6, fontWeight: 500 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <style>{`.stats-grid { grid-template-columns: repeat(4,1fr) !important; } @media(max-width:640px){.stats-grid{grid-template-columns:repeat(2,1fr)!important;}}`}</style>
+    </div>
+  );
+}
+
+export default function Home() {
+  const { notices, successStories, settings, settingsLoaded } = useApp();
+  const latestNotices = notices.slice(0, 3);
+
+  return (
+    <div>
+      {/* Hero */}
+      <section className="hero-gradient" style={{ minHeight: "100vh", display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
+        {/* Background image overlay */}
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: settingsLoaded
+            ? `url(${settings.homeHeroImageUrl || "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1400&h=900&fit=crop&auto=format"})`
+            : "none",
+          backgroundSize: "cover", backgroundPosition: "center",
+          opacity: 0.12,
+        }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(20,83,45,0.95) 0%, rgba(22,101,52,0.88) 60%, rgba(21,128,61,0.8) 100%)" }} />
+
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "100px 20px 80px", position: "relative", zIndex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }} className="hero-grid">
+            <div className="animate-fadeInUp">
+              <div className="green-badge" style={{ background: "rgba(187,247,208,0.2)", color: "#86efac", marginBottom: 20 }}>
+                {settingsLoaded ? (settings.homeAdmissionText || "✦ ভর্তি চলছে — ২০২৮ শিক্ষাবর্ষ") : ""}
+              </div>
+              <h1 style={{
+                fontFamily: "Lora, serif",
+                fontSize: "clamp(2rem, 5vw, 3.2rem)",
+                color: "white",
+                fontWeight: 700,
+                lineHeight: 1.2,
+                marginBottom: 20,
+              }}>
+                Commerce Unique Home
+              </h1>
+              <p style={{
+                fontFamily: "Hind Siliguri, sans-serif",
+                fontSize: "clamp(1.1rem, 2.5vw, 1.35rem)",
+                color: "#86efac",
+                fontStyle: "italic",
+                marginBottom: 16,
+                lineHeight: 1.5,
+              }}>
+                "শিক্ষার মানে শুধু ভালো ফলাফল নয়,<br />সঠিক দিকনির্দেশনাও।"
+              </p>
+              <p style={{ color: "#a7f3d0", fontSize: "0.95rem", lineHeight: 1.8, marginBottom: 36, maxWidth: 480 }}>
+                কমার্স বিভাগের জন্য বাংলাদেশের একটি বিশ্বস্ত কোচিং প্রতিষ্ঠান। অভিজ্ঞ শিক্ষকমণ্ডলী, আধুনিক পাঠদান পদ্ধতি ও ব্যক্তিগত মনোযোগের মাধ্যমে আমরা শিক্ষার্থীদের সর্বোচ্চ সাফল্য নিশ্চিত করি।
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                <Link to="/admission-form" className="btn-white">
+                  ✦ ভর্তি ফরম
+                </Link>
+                <Link to="/admission" className="btn-outline">
+                  ভর্তি তথ্য দেখুন
+                </Link>
+                <Link to="/about" className="btn-outline" style={{ borderColor: "rgba(255,255,255,0.4)" }}>
+                  আমাদের সম্পর্কে
+                </Link>
+              </div>
+            </div>
+
+            {/* Hero image card */}
+            <div style={{ display: "flex", justifyContent: "center" }} className="hero-image-col">
+              <div style={{
+                borderRadius: 20,
+                overflow: "hidden",
+                boxShadow: "0 32px 64px rgba(0,0,0,0.3)",
+                maxWidth: 420,
+                width: "100%",
+                border: "3px solid rgba(255,255,255,0.15)",
+              }}>
+                {settingsLoaded ? (
+  <img
+    src={
+      settings.homeHeroImageUrl ||
+      "https://images.unsplash.com/photo-1758270705067-0d7edee57af0?w=840&h=640&fit=crop&auto=format"
+    }
+    alt="শিক্ষার্থীরা ক্লাসে"
+    style={{
+      width: "100%",
+      height: 340,
+      objectFit: "cover",
+      display: "block",
+    }}
+  />
+) : (
+  <div
+    style={{
+      width: "100%",
+      height: 340,
+      background: "rgba(255,255,255,0.06)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <span style={{ color: "#86efac", fontSize: "0.9rem" }}>
+      ছবি লোড হচ্ছে...
+    </span>
+  </div>
+)}
+                <div style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(10px)", padding: "16px 20px" }}>
+                  <div style={{ color: "#86efac", fontWeight: 700, fontSize: "1.05rem" }}>HSC & SSC Admission</div>
+                  <div style={{ color: "#a7f3d0", fontSize: "0.85rem", marginTop: 4 }}>ভর্তি আসন সীমিত — আজই আবেদন করুন</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <style>{`
+          @media(max-width:768px){
+            .hero-grid{grid-template-columns:1fr!important;}
+            .hero-image-col{display:none!important;}
+          }
+        `}</style>
+      </section>
+
+      {/* Stats */}
+      <StatsSection />
+
+      {/* Why Choose Us */}
+      <section style={{ padding: "80px 20px", background: "white" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <span className="green-badge" style={{ marginBottom: 12 }}>কেন আমাদের বেছে নেবেন?</span>
+            <h2 className="section-title" style={{ marginTop: 10 }}>Commerce Unique Home-এর বিশেষত্ব</h2>
+            <p className="section-subtitle" style={{ margin: "16px auto 0" }}>
+              আমরা শিক্ষার্থীদের শুধু পাস করাই না — আমরা তাদের সফল মানুষ হিসেবে গড়ে তুলি।
+            </p>
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 24,
+          }} className="features-grid">
+            {features.map((f, i) => (
+              <div
+                key={i}
+                className="card-hover"
+                style={{
+                  background: "white",
+                  border: "1.5px solid #dcfce7",
+                  borderRadius: 16,
+                  padding: "28px 24px",
+                  boxShadow: "0 4px 16px rgba(22,101,52,0.06)",
+                }}
+              >
+                <div style={{ fontSize: "2.2rem", marginBottom: 14 }}>{f.icon}</div>
+                <h3 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1.1rem", marginBottom: 10 }}>{f.title}</h3>
+                <p style={{ color: "#6b7280", fontSize: "0.88rem", lineHeight: 1.7 }}>{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <style>{`@media(max-width:900px){.features-grid{grid-template-columns:repeat(2,1fr)!important;}}@media(max-width:560px){.features-grid{grid-template-columns:1fr!important;}}`}</style>
+      </section>
+
+      {/* Latest Notices */}
+      <section style={{ padding: "80px 20px", background: "#f0fdf4" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 40, flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <span className="green-badge" style={{ marginBottom: 10 }}>সর্বশেষ আপডেট</span>
+              <h2 className="section-title" style={{ marginTop: 8 }}>নোটিশ বোর্ড</h2>
+            </div>
+            <Link to="/notice" style={{ color: "#166534", fontWeight: 700, textDecoration: "none", fontSize: "0.9rem" }}>
+              সব নোটিশ দেখুন →
+            </Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {latestNotices.map(n => (
+              <div key={n.id} className="notice-card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      {n.important && (
+                        <span style={{
+                          background: "#fef2f2", color: "#dc2626",
+                          fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px",
+                          borderRadius: 100, textTransform: "uppercase",
+                        }}>গুরুত্বপূর্ণ</span>
+                      )}
+                      <h3 style={{ fontWeight: 700, color: "#14532d", fontSize: "1rem", margin: 0 }}>{n.title}</h3>
+                    </div>
+                    <p style={{ color: "#6b7280", fontSize: "0.88rem", lineHeight: 1.7, margin: 0 }}>{n.content}</p>
+                  </div>
+                  <div style={{ color: "#9ca3af", fontSize: "0.8rem", whiteSpace: "nowrap" }}>{n.date}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Success Stories Teaser */}
+      <section style={{ padding: "80px 20px", background: "white" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 40, flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <span className="green-badge" style={{ marginBottom: 10 }}>শিক্ষার্থীদের কথা</span>
+              <h2 className="section-title" style={{ marginTop: 8 }}>সাফল্যের গল্প</h2>
+            </div>
+            <Link to="/success" style={{ color: "#166534", fontWeight: 700, textDecoration: "none", fontSize: "0.9rem" }}>
+              সব দেখুন →
+            </Link>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }} className="stories-grid">
+            {successStories.slice(0, 3).map(s => (
+              <div
+                key={s.id}
+                className="card-hover"
+                style={{
+                  background: "white",
+                  border: "1.5px solid #dcfce7",
+                  borderRadius: 16,
+                  padding: "24px",
+                  boxShadow: "0 4px 16px rgba(22,101,52,0.06)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+                  <img src={s.photo || "https://placehold.co/56x56/dcfce7/166534?text=S"} alt={s.name} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "3px solid #dcfce7" }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#14532d", fontSize: "0.95rem" }}>{s.name}</div>
+                    <div style={{ color: "#16a34a", fontSize: "0.8rem", fontWeight: 600 }}>{s.result}</div>
+                    <div style={{ color: "#9ca3af", fontSize: "0.75rem" }}>{s.exam}</div>
+                  </div>
+                </div>
+                <p style={{ color: "#6b7280", fontSize: "0.85rem", lineHeight: 1.7, fontStyle: "italic", borderLeft: "3px solid #dcfce7", paddingLeft: 12 }}>
+                  "{s.testimonial}"
+                </p>
+                <div style={{ marginTop: 12, color: "#9ca3af", fontSize: "0.78rem" }}>— {s.institution}, {s.batch}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <style>{`@media(max-width:900px){.stories-grid{grid-template-columns:1fr!important;}}`}</style>
+      </section>
+
+      {/* CTA Banner */}
+      <section style={{ background: "linear-gradient(135deg, #14532d, #166534)", padding: "64px 20px" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
+          <h2 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.5rem, 4vw, 2.2rem)", color: "white", fontWeight: 700, marginBottom: 16 }}>
+            আজই ভর্তি হোন এবং সাফল্যের পথে এগিয়ে যান
+          </h2>
+          <p style={{ color: "#a7f3d0", fontSize: "0.95rem", lineHeight: 1.8, marginBottom: 32 }}>
+            সীমিত আসন পাওয়া যাচ্ছে। দ্রুত আবেদন করুন এবং আমাদের অভিজ্ঞ শিক্ষকমণ্ডলীর তত্ত্বাবধানে পড়াশোনা শুরু করুন।
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
+            <Link to="/admission-form" className="btn-white">ভর্তি ফরম পূরণ করুন</Link>
+            <Link to="/contact" className="btn-outline">যোগাযোগ করুন</Link>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

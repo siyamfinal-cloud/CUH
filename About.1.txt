@@ -1,0 +1,205 @@
+const milestones = [
+  { year: "২০০৭", title: "প্রতিষ্ঠা", desc: "মাত্র ৩০ জন শিক্ষার্থী নিয়ে Commerce Unique Home-এর যাত্রা শুরু।" },
+  { year: "২০১৭", title: "সাফল্যের নতুন অধ্যায়", desc: "সকল ব্যাচের শিক্ষার্থীদের ধারাবাহিক সাফল্য ও উজ্জ্বল ফলাফল।" },
+  { year: "২০১৯", title: "সম্প্রসারণ", desc: "নতুন ক্লাসরুম ও আধুনিক ডিজিটাল শিক্ষা সুবিধা চালু।" },
+  { year: "২০২১", title: "অনলাইন পাঠদান", desc: "মহামারি কালে সফলভাবে অনলাইন ক্লাস পরিচালনা।" },
+  { year: "২০২৩", title: "৪০০০+ সাফল্য", desc: "মোট ৪০০০+ শিক্ষার্থী সফলভাবে HSC উত্তীর্ণ।" },
+  { year: "২০২৬", title: "নতুন লক্ষ্য", desc: "উন্নততর সুবিধা ও আরও বেশি শিক্ষার্থীর স্বপ্ন পূরণে এগিয়ে যাওয়া।" },
+];
+
+import { useApp } from "../context/AppContext";
+
+export default function About() {
+  const { settings } = useApp();
+  return (
+    <div style={{ paddingTop: 64 }}>
+      {/* Header */}
+      <div style={{ background: "linear-gradient(135deg, #14532d, #166534)", padding: "64px 20px 80px", position: "relative", overflow: "hidden" }}>
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: "url(https://images.unsplash.com/photo-1631555567492-8ba42744b474?w=1400&h=600&fit=crop&auto=format)",
+          backgroundSize: "cover", backgroundPosition: "center",
+          opacity: 0.08,
+        }} />
+        <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
+          <span style={{ display: "inline-block", background: "rgba(187,247,208,0.2)", color: "#86efac", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 16 }}>
+            আমাদের পরিচয়
+          </span>
+          <h1 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.8rem, 5vw, 3rem)", color: "white", fontWeight: 700, marginBottom: 20 }}>
+            Commerce Unique Home সম্পর্কে
+          </h1>
+          <p style={{ color: "#a7f3d0", fontSize: "1rem", lineHeight: 1.8 }}>
+            বাংলাদেশের কমার্স শিক্ষার অন্যতম বিশ্বস্ত প্রতিষ্ঠান হিসেবে আমরা শিক্ষার্থীদের স্বপ্ন পূরণে নিরলসভাবে কাজ করে যাচ্ছি।
+          </p>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px" }}>
+        {/* Intro section */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center", padding: "80px 0" }} className="about-grid">
+          <div>
+            <span style={{ display: "inline-block", background: "#dcfce7", color: "#166534", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 16 }}>আমাদের প্রতিষ্ঠান</span>
+            <h2 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.4rem, 3vw, 2rem)", color: "#14532d", fontWeight: 700, marginBottom: 20 }}>
+              শিক্ষার আলোয় আলোকিত করছি ভবিষ্যৎ প্রজন্মকে
+            </h2>
+            <p style={{ color: "#6b7280", fontSize: "0.92rem", lineHeight: 1.9, marginBottom: 16 }}>
+              ২০০৭ সাল থেকে Commerce Unique Home কমার্স বিভাগের শিক্ষার্থীদের জন্য একটি বিশ্বস্ত শিক্ষা প্রতিষ্ঠান হিসেবে পরিচিতি লাভ করেছে। আমাদের লক্ষ্য শুধু ভালো ফলাফল নয়, বরং শিক্ষার্থীদের ভবিষ্যৎ ক্যারিয়ারের জন্য প্রস্তুত করা।
+            </p>
+            <p style={{ color: "#6b7280", fontSize: "0.92rem", lineHeight: 1.9 }}>
+              অভিজ্ঞ শিক্ষকমণ্ডলী, আধুনিক শিক্ষা পদ্ধতি এবং প্রতিটি শিক্ষার্থীর প্রতি ব্যক্তিগত মনোযোগই আমাদের সাফল্যের মূল চাবিকাঠি। আমরা বিশ্বাস করি, সঠিক দিকনির্দেশনা এবং নিয়মিত অনুশীলনের মাধ্যমে যেকোনো শিক্ষার্থী সর্বোচ্চ সাফল্য অর্জন করতে পারে।
+            </p>
+          </div>
+          <div style={{ borderRadius: 20, overflow: "hidden", boxShadow: "0 20px 60px rgba(22,101,52,0.15)", position: "relative" }}>
+            <img
+              src={settings.institutionHeroImageUrl || "https://images.unsplash.com/photo-1768592959322-659216ae87ea?w=700&h=500&fit=crop&auto=format"}
+              alt="Commerce Unique Home শিক্ষার্থীরা"
+              style={{ width: "100%", height: 380, objectFit: "cover", display: "block" }}
+            />
+          </div>
+        </div>
+
+        {/* Mission Vision Philosophy */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, marginBottom: 80 }} className="mvp-grid">
+          {[
+            {
+              icon: "🎯",
+              title: "আমাদের লক্ষ্য (Mission)",
+              desc: "প্রতিটি শিক্ষার্থীকে সর্বোচ্চ একাডেমিক সাফল্য অর্জনে সহায়তা করা এবং তাদের জীবনের প্রতিটি ক্ষেত্রে দক্ষ করে গড়ে তোলা।",
+              bg: "#f0fdf4",
+              border: "#bbf7d0",
+            },
+            {
+              icon: "🌟",
+              title: "আমাদের দৃষ্টিভঙ্গি (Vision)",
+              desc: "বাংলাদেশের কমার্স শিক্ষায় সর্বোচ্চ মানের কোচিং প্রদানকারী প্রতিষ্ঠান হিসেবে স্বীকৃতি লাভ করা এবং হাজারো শিক্ষার্থীর স্বপ্ন পূরণ করা।",
+              bg: "#fffbeb",
+              border: "#fde68a",
+            },
+            {
+              icon: "📚",
+              title: "আমাদের শিক্ষা দর্শন",
+              desc: "শিক্ষার্থীকেন্দ্রিক পাঠদান, ব্যক্তিগত মনোযোগ এবং ধারাবাহিক মূল্যায়নের মাধ্যমে প্রতিটি শিক্ষার্থীর সম্ভাবনা বিকশিত করা।",
+              bg: "#f0f9ff",
+              border: "#bae6fd",
+            },
+          ].map(c => (
+            <div
+              key={c.title}
+              style={{
+                background: c.bg,
+                border: `1.5px solid ${c.border}`,
+                borderRadius: 16,
+                padding: "28px 24px",
+              }}
+            >
+              <div style={{ fontSize: "2rem", marginBottom: 14 }}>{c.icon}</div>
+              <h3 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1rem", marginBottom: 12 }}>{c.title}</h3>
+              <p style={{ color: "#6b7280", fontSize: "0.87rem", lineHeight: 1.8 }}>{c.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <section style={{ background: "linear-gradient(180deg, #f0fdf4, white)", padding: "80px 20px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <span style={{ display: "inline-block", background: "#dcfce7", color: "#166534", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 14 }}>আমাদের যাত্রা</span>
+            <h2 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.5rem, 4vw, 2.2rem)", color: "#14532d", fontWeight: 700 }}>মাইলফলক ও সাফল্যের ধারা</h2>
+          </div>
+          <div style={{ position: "relative" }}>
+            <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, background: "#bbf7d0", transform: "translateX(-50%)" }} className="timeline-line" />
+            {milestones.map((m, i) => (
+              <div
+                key={m.year}
+                style={{
+                  display: "flex",
+                  justifyContent: i % 2 === 0 ? "flex-start" : "flex-end",
+                  marginBottom: 32,
+                  position: "relative",
+                }}
+                className="timeline-item"
+              >
+                <div style={{
+                  width: "44%",
+                  background: "white",
+                  border: "1.5px solid #dcfce7",
+                  borderRadius: 12,
+                  padding: "20px 24px",
+                  boxShadow: "0 4px 16px rgba(22,101,52,0.07)",
+                  position: "relative",
+                }}>
+                  <div style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#16a34a", fontSize: "1.3rem", marginBottom: 6 }}>{m.year}</div>
+                  <div style={{ fontWeight: 700, color: "#14532d", marginBottom: 8, fontSize: "0.95rem" }}>{m.title}</div>
+                  <div style={{ color: "#6b7280", fontSize: "0.85rem", lineHeight: 1.7 }}>{m.desc}</div>
+                </div>
+                <div style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  background: "#166534",
+                  border: "3px solid white",
+                  boxShadow: "0 0 0 3px #bbf7d0",
+                  zIndex: 2,
+                }} className="timeline-dot" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <style>{`
+          @media(max-width:640px){
+            .timeline-line{left:20px!important;}
+            .timeline-dot{left:20px!important;transform:translate(-50%,-50%)!important;}
+            .timeline-item{justify-content:flex-end!important;}
+            .timeline-item>div:first-child{width:calc(100% - 48px)!important;}
+          }
+        `}</style>
+      </section>
+
+      {/* Environment */}
+      <section style={{ padding: "80px 20px", background: "white" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <h2 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.5rem, 4vw, 2.2rem)", color: "#14532d", fontWeight: 700, marginBottom: 12 }}>
+              শিক্ষার পরিবেশ
+            </h2>
+            <p style={{ color: "#6b7280", maxWidth: 600, margin: "0 auto", fontSize: "0.92rem", lineHeight: 1.8 }}>
+              আমরা এমন একটি পরিবেশ তৈরি করেছি যেখানে শিক্ষার্থীরা নিরাপদে, আনন্দের সাথে এবং কার্যকরভাবে শিখতে পারে।
+            </p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }} className="env-grid">
+            <div style={{ display: "grid", gap: 20 }}>
+              {[
+                "শিক্ষার্থীকেন্দ্রিক পাঠদান পদ্ধতি",
+                "ফাইনাল মডেল টেস্ট",
+                "শীতাতপ নিয়ন্ত্রিত আরামদায়ক ক্লাসরুম",
+                "বিনামূল্যে ওয়াই-ফাই সুবিধা",
+              ].map(f => (
+                <div
+                  key={f}
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1.5px solid #dcfce7",
+                    borderRadius: 12,
+                    padding: "16px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ color: "#16a34a", fontSize: "1.2rem" }}>✓</div>
+                  <div style={{ fontWeight: 600, color: "#14532d", fontSize: "0.9rem" }}>{f}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <style>{`@media(max-width:640px){.env-grid{grid-template-columns:1fr!important;}.mvp-grid{grid-template-columns:1fr!important;}.about-grid{grid-template-columns:1fr!important;}}`}</style>
+      </section>
+    </div>
+  );
+}

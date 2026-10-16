@@ -1,0 +1,415 @@
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import type { Session } from "@supabase/supabase-js";
+import {
+  supabase,
+  rowToTeacher,
+  rowToNotice,
+  rowToStory,
+  rowToCourse,
+  rowToGallery,
+  rowToApplication,
+  rowToSettings,
+  rowToStats,
+} from "../lib/supabase";
+
+// ─── Public-facing types (used by all pages) ─────────────────────────────────
+
+export interface Teacher {
+  id: string;
+  name: string;
+  designation: string;
+  subject: string;
+  qualification: string;
+  experience: string;
+  bio: string;
+  photo: string;
+  serialNumber: number | null;
+}
+
+export interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  important: boolean;
+}
+
+export interface SuccessStory {
+  id: string;
+  name: string;
+  institution: string;
+  exam: string;
+  result: string;
+  batch: string;
+  testimonial: string;
+  photo: string;
+}
+
+export interface Course {
+  id: string;
+  name: string;
+  classes: string;
+  schedule: string;
+  admissionFee: string;
+  monthlyFee: string;
+  term: string;
+  startDate: string;
+  timing: string;
+}
+
+export interface GalleryItem {
+  id: string;
+  url: string;
+  caption: string;
+  category: string;
+}
+
+export interface Application {
+  id: string;
+  refNumber: string;
+  submittedAt: string;
+  status: "pending" | "contacted" | "confirmed" | "rejected";
+  studentName: string;
+  fatherName: string;
+  motherName: string;
+  dob: string;
+  gender: string;
+  mobile: string;
+  currentAddress: string;
+  permanentAddress: string;
+  currentClass: string;
+  institution: string;
+  lastExam: string;
+  gpa: string;
+  batch: string;
+  guardianName: string;
+  guardianRelation: string;
+  guardianMobile: string;
+  guardianOccupation: string;
+  referralSource: string;
+  comments: string;
+  photo: string;
+}
+
+export interface SiteSettings {
+  mapEmbedUrl: string;
+  address: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  facebook: string;
+  openingHours: string;
+  institutionHeroImageUrl: string;
+  homeHeroImageUrl: string;
+  homeAdmissionText: string;
+}
+
+export interface Stats {
+  successRate: string;
+  totalStudents: string;
+  aPlus: string;
+  teachers: string;
+}
+
+// ─── Default fallback values ──────────────────────────────────────────────────
+
+const defaultSettings: SiteSettings = {
+  mapEmbedUrl:
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3651.902!2d90.4125!3d23.8103!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjPCsDQ4JzM3LjEiTiA5MMKwMjQnNDUuMCJF!5e0!3m2!1sen!2sbd!4v1600000000000!5m2!1sen!2sbd",
+  address: "মিরপুর-১০, ঢাকা-১২১৬, বাংলাদেশ",
+  phone: "+880 1712-345678",
+  whatsapp: "+880 1712-345678",
+  email: "info@commerceuniquehome.com",
+  facebook: "https://facebook.com/commerceuniquehome",
+  openingHours: "শনি-বৃহস্পতি: সকাল ৭টা - রাত ৯টা",
+  institutionHeroImageUrl: "",
+  homeHeroImageUrl: "",
+  homeAdmissionText: "✦ ভর্তি চলছে — ২০২৮ শিক্ষাবর্ষ",
+};
+
+const defaultStats: Stats = {
+  successRate: "95",
+  totalStudents: "500",
+  aPlus: "100",
+  teachers: "15",
+};
+
+// ─── Context type ─────────────────────────────────────────────────────────────
+
+interface AppContextType {
+  // Data
+  teachers: Teacher[];
+  notices: Notice[];
+  successStories: SuccessStory[];
+  courses: Course[];
+  gallery: GalleryItem[];
+  applications: Application[];
+  settings: SiteSettings;
+  stats: Stats;
+
+  // Status
+  loading: boolean;
+  dbReady: boolean; // true once tables have been confirmed to exist
+  settingsLoaded: boolean; // true once cuh_settings request has completed (success or failure)
+
+  // Auth
+  session: Session | null;
+  isAdminLoggedIn: boolean;
+  adminLogin: (email: string, password: string) => Promise<{ error?: string }>;
+  adminLogout: () => Promise<void>;
+
+  // Refresh functions — called by admin panel after mutations
+  refreshTeachers: () => Promise<void>;
+  refreshNotices: () => Promise<void>;
+  refreshSuccessStories: () => Promise<void>;
+  refreshCourses: () => Promise<void>;
+  refreshGallery: () => Promise<void>;
+  refreshApplications: () => Promise<void>;
+  refreshSettings: () => Promise<void>;
+  refreshStats: () => Promise<void>;
+}
+
+// ─── Safe default context (used when Provider is unavailable) ────────────────
+
+const noop = async () => {};
+const defaultContext: AppContextType = {
+  teachers: [],
+  notices: [],
+  successStories: [],
+  courses: [],
+  gallery: [],
+  applications: [],
+  settings: defaultSettings,
+  stats: defaultStats,
+  loading: false,
+  dbReady: false,
+  settingsLoaded: false,
+  session: null,
+  isAdminLoggedIn: false,
+  adminLogin: async () => ({}),
+  adminLogout: noop,
+  refreshTeachers: noop,
+  refreshNotices: noop,
+  refreshSuccessStories: noop,
+  refreshCourses: noop,
+  refreshGallery: noop,
+  refreshApplications: noop,
+  refreshSettings: noop,
+  refreshStats: noop,
+};
+
+// ─── Context ─────────────────────────────────────────────────────────────────
+
+const AppContext = createContext<AppContextType>(defaultContext);
+
+// ─── Provider ────────────────────────────────────────────────────────────────
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [successStories, setSuccessStories] = useState<SuccessStory[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
+  const [stats, setStats] = useState<Stats>(defaultStats);
+  const [loading, setLoading] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const adminLogin = async (email: string, password: string): Promise<{ error?: string }> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    return {};
+  };
+
+  const adminLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // ── Fetchers ─────────────────────────────────────────────────────────────────
+  const refreshTeachers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("cuh_teachers")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("[cuh_teachers] fetch error:", error.message, error.details);
+      return;
+    }
+    if (data) {
+      const mapped = data.map(rowToTeacher);
+      mapped.sort((a, b) => {
+        const an = a.serialNumber;
+        const bn = b.serialNumber;
+        if (an === null && bn === null) return 0;
+        if (an === null) return 1;
+        if (bn === null) return -1;
+        return an - bn;
+      });
+      setTeachers(mapped);
+    }
+  }, []);
+
+  const refreshNotices = useCallback(async () => {
+    const { data } = await supabase
+      .from("cuh_notices")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setNotices(data.map(rowToNotice));
+  }, []);
+
+  const refreshSuccessStories = useCallback(async () => {
+    const { data } = await supabase
+      .from("cuh_success_stories")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (data) setSuccessStories(data.map(rowToStory));
+  }, []);
+
+  const refreshCourses = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("cuh_courses")
+      .select("id, name, classes, schedule, admission_fee, monthly_fee, term, start_date, timing, created_at")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      if (error.message.includes("schema cache") || error.message.includes("does not exist")) {
+        console.info("[cuh_courses] table not found. Open Admin Panel → কোর্স to set it up.");
+      } else {
+        console.warn("[cuh_courses] fetch error:", error.message);
+      }
+      return;
+    }
+    if (data) setCourses(data.map(rowToCourse));
+  }, []);
+
+  const refreshGallery = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("cuh_gallery")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      if (!error.message.includes("schema cache") && !error.message.includes("does not exist")) {
+        console.warn("[cuh_gallery] fetch error:", error.message);
+      }
+      return;
+    }
+    if (data) setGallery(data.map(rowToGallery));
+  }, []);
+
+  const refreshApplications = useCallback(async () => {
+    const { data } = await supabase
+      .from("cuh_applications")
+      .select("*")
+      .order("submitted_at", { ascending: false });
+    if (data) setApplications(data.map(rowToApplication));
+  }, []);
+
+  const refreshSettings = useCallback(async () => {
+    const { data } = await supabase
+      .from("cuh_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+    if (data) setSettings(rowToSettings(data));
+    setSettingsLoaded(true);
+  }, []);
+
+  const refreshStats = useCallback(async () => {
+    const { data } = await supabase
+      .from("cuh_stats")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+    if (data) setStats(rowToStats(data));
+  }, []);
+
+  // ── Initial load ──────────────────────────────────────────────────────────────
+  // Fire all fetches independently so loading never blocks the renderer.
+  // Each refresh updates its own state slice when it resolves; the UI fills in
+  // progressively. loading stays false so Figma Make never sees a stalled tree.
+  useEffect(() => {
+    Promise.all([
+      refreshTeachers(),
+      refreshNotices(),
+      refreshSuccessStories(),
+      refreshCourses(),
+      refreshGallery(),
+      refreshSettings(),
+      refreshStats(),
+    ]).then(() => setDbReady(true)).catch(() => setDbReady(false));
+  }, [
+    refreshTeachers,
+    refreshNotices,
+    refreshSuccessStories,
+    refreshCourses,
+    refreshGallery,
+    refreshSettings,
+    refreshStats,
+  ]);
+
+  return (
+    <AppContext.Provider
+      value={{
+        teachers,
+        notices,
+        successStories,
+        courses,
+        gallery,
+        applications,
+        settings,
+        stats,
+        loading,
+        dbReady,
+        settingsLoaded,
+        session,
+        isAdminLoggedIn: !!session,
+        adminLogin,
+        adminLogout,
+        refreshTeachers,
+        refreshNotices,
+        refreshSuccessStories,
+        refreshCourses,
+        refreshGallery,
+        refreshApplications,
+        refreshSettings,
+        refreshStats,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useApp(): AppContextType {
+  return useContext(AppContext);
+}
+
+// Force a full page reload whenever this module is hot-updated.
+// AppContext creates a new createContext() object on every re-evaluation,
+// so HMR would leave the mounted Provider providing the old context while
+// consumers import the new one — causing useContext to return the default.
+// A full reload is always safe and keeps context identity stable.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _meta = import.meta as any;
+if (_meta.hot) _meta.hot.decline();

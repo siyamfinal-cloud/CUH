@@ -1,0 +1,344 @@
+import { useState } from "react";
+import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
+import { Link } from "react-router-dom";
+
+function generateRef(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let ref = "CUH-";
+  for (let i = 0; i < 8; i++) ref += chars[Math.floor(Math.random() * chars.length)];
+  return ref;
+}
+
+const sourceOptions = ["বন্ধু/পরিচিতজনের মাধ্যমে", "সোশ্যাল মিডিয়া (Facebook)", "পোস্টার/ব্যানার", "গুগল সার্চ", "অভিভাবকের মাধ্যমে", "অন্যান্য"];
+
+function Field({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <label style={{ display: "block", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: 6 }}>
+        {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
+      </label>
+      {children}
+      {error && <div style={{ color: "#dc2626", fontSize: "0.78rem", marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
+function inputStyle(err?: string): React.CSSProperties {
+  return {
+    width: "100%",
+    padding: "10px 14px",
+    border: `1.5px solid ${err ? "#dc2626" : "#d1fae5"}`,
+    borderRadius: 8,
+    fontFamily: "'Hind Siliguri', sans-serif",
+    fontSize: "0.92rem",
+    background: "white",
+    color: "#1c1c1c",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+}
+
+export default function AdmissionForm() {
+  const { courses } = useApp();
+  const [submitted, setSubmitted] = useState(false);
+  const [refNumber, setRefNumber] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState({
+    studentName: "",
+    fatherName: "",
+    motherName: "",
+    dob: "",
+    gender: "",
+    mobile: "",
+    currentAddress: "",
+    permanentAddress: "",
+    currentClass: "",
+    institution: "",
+    lastExam: "",
+    gpa: "",
+    batch: "",
+    guardianName: "",
+    guardianRelation: "",
+    guardianMobile: "",
+    guardianOccupation: "",
+    referralSource: "",
+    comments: "",
+    photo: "",
+  });
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm(f => ({ ...f, [k]: e.target.value }));
+    setErrors(err => { const n = { ...err }; delete n[k]; return n; });
+  };
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.studentName.trim()) e.studentName = "নাম প্রয়োজন";
+    if (!form.fatherName.trim()) e.fatherName = "পিতার নাম প্রয়োজন";
+    if (!form.mobile.trim()) e.mobile = "মোবাইল নম্বর প্রয়োজন";
+    if (!form.gender) e.gender = "লিঙ্গ নির্বাচন করুন";
+    if (!form.batch) e.batch = "ব্যাচ নির্বাচন করুন";
+    if (!form.guardianMobile.trim()) e.guardianMobile = "অভিভাবকের নম্বর প্রয়োজন";
+    return e;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+
+    setSubmitting(true);
+    setSubmitError("");
+    const ref = generateRef();
+
+    const { error } = await supabase.from("cuh_applications").insert({
+      ref_number: ref,
+      status: "pending",
+      student_name: form.studentName,
+      father_name: form.fatherName,
+      mother_name: form.motherName,
+      dob: form.dob,
+      gender: form.gender,
+      mobile: form.mobile,
+      current_address: form.currentAddress,
+      permanent_address: form.permanentAddress,
+      current_class: form.currentClass,
+      institution: form.institution,
+      last_exam: form.lastExam,
+      gpa: form.gpa,
+      batch: form.batch,
+      guardian_name: form.guardianName,
+      guardian_relation: form.guardianRelation,
+      guardian_mobile: form.guardianMobile,
+      guardian_occupation: form.guardianOccupation,
+      referral_source: form.referralSource,
+      comments: form.comments,
+      photo_url: form.photo,
+    });
+
+    setSubmitting(false);
+
+    if (error) {
+      setSubmitError("আবেদন জমা দিতে সমস্যা হয়েছে: " + error.message);
+      return;
+    }
+
+    setRefNumber(ref);
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (submitted) {
+    return (
+      <div style={{ paddingTop: 64, minHeight: "100vh", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{
+          background: "white",
+          borderRadius: 20,
+          padding: "56px 48px",
+          maxWidth: 560,
+          width: "90%",
+          textAlign: "center",
+          boxShadow: "0 20px 60px rgba(22,101,52,0.12)",
+          border: "2px solid #bbf7d0",
+        }}>
+          <div style={{ fontSize: "4rem", marginBottom: 20 }}>🎉</div>
+          <h2 style={{ fontFamily: "Lora, serif", fontSize: "1.8rem", color: "#14532d", fontWeight: 700, marginBottom: 16 }}>
+            আবেদন সফল হয়েছে!
+          </h2>
+          <p style={{ color: "#6b7280", fontSize: "0.95rem", lineHeight: 1.8, marginBottom: 24 }}>
+            আপনার ভর্তি আবেদন সফলভাবে জমা হয়েছে। আমাদের প্রতিনিধি শীঘ্রই আপনার সাথে যোগাযোগ করবেন।
+          </p>
+          <div style={{
+            background: "#f0fdf4",
+            border: "2px dashed #bbf7d0",
+            borderRadius: 12,
+            padding: "20px",
+            marginBottom: 28,
+          }}>
+            <div style={{ color: "#6b7280", fontSize: "0.82rem", marginBottom: 6 }}>আপনার আবেদন নম্বর</div>
+            <div style={{ fontFamily: "monospace", fontSize: "1.5rem", fontWeight: 700, color: "#166534", letterSpacing: 2 }}>
+              {refNumber}
+            </div>
+            <div style={{ color: "#9ca3af", fontSize: "0.78rem", marginTop: 6 }}>এই নম্বরটি সংরক্ষণ করুন</div>
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link to="/" className="btn-primary">হোমে ফিরে যান</Link>
+            <button
+              onClick={() => { setSubmitted(false); setForm({ studentName: "", fatherName: "", motherName: "", dob: "", gender: "", mobile: "", currentAddress: "", permanentAddress: "", currentClass: "", institution: "", lastExam: "", gpa: "", batch: "", guardianName: "", guardianRelation: "", guardianMobile: "", guardianOccupation: "", referralSource: "", comments: "", photo: "" }); }}
+              style={{ background: "white", border: "2px solid #166534", color: "#166534", padding: "10px 24px", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}
+            >
+              নতুন আবেদন
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ paddingTop: 64, background: "#f0fdf4", minHeight: "100vh" }}>
+      {/* Header */}
+      <div style={{ background: "linear-gradient(135deg, #14532d, #166534)", padding: "56px 20px 72px" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
+          <span style={{ display: "inline-block", background: "rgba(187,247,208,0.2)", color: "#86efac", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 14 }}>
+            ২০২৬ শিক্ষাবর্ষ
+          </span>
+          <h1 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.6rem, 4vw, 2.4rem)", color: "white", fontWeight: 700, marginBottom: 12 }}>
+            অনলাইন ভর্তি ফরম
+          </h1>
+          <p style={{ color: "#a7f3d0", fontSize: "0.92rem" }}>
+            নিচের ফরমটি সঠিকভাবে পূরণ করুন। (*) চিহ্নিত তথ্য অবশ্যই দিতে হবে।
+          </p>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 860, margin: "-32px auto 60px", padding: "0 20px" }}>
+        <form onSubmit={handleSubmit} noValidate style={{
+          background: "white",
+          borderRadius: 20,
+          boxShadow: "0 20px 60px rgba(22,101,52,0.1)",
+          overflow: "hidden",
+          border: "1.5px solid #dcfce7",
+        }}>
+          {/* Student Info */}
+          <div style={{ padding: "32px 36px", borderBottom: "1px solid #f0fdf4" }} className="form-section">
+            <h2 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1.15rem", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ background: "#166534", color: "white", borderRadius: 8, padding: "4px 12px", fontSize: "0.8rem" }}>১</span>
+              শিক্ষার্থীর তথ্য
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }} className="form-grid">
+              <Field label="শিক্ষার্থীর নাম" required error={errors.studentName}>
+                <input style={inputStyle(errors.studentName)} value={form.studentName} onChange={set("studentName")} placeholder="পূর্ণ নাম লিখুন" />
+              </Field>
+              <Field label="পিতার নাম" required error={errors.fatherName}>
+                <input style={inputStyle(errors.fatherName)} value={form.fatherName} onChange={set("fatherName")} placeholder="পিতার পূর্ণ নাম" />
+              </Field>
+              <Field label="মাতার নাম">
+                <input style={inputStyle()} value={form.motherName} onChange={set("motherName")} placeholder="মাতার পূর্ণ নাম" />
+              </Field>
+              <Field label="জন্মতারিখ">
+                <input type="date" style={inputStyle()} value={form.dob} onChange={set("dob")} />
+              </Field>
+              <Field label="লিঙ্গ" required error={errors.gender}>
+                <select style={inputStyle(errors.gender)} value={form.gender} onChange={set("gender")}>
+                  <option value="">নির্বাচন করুন</option>
+                  <option value="male">পুরুষ</option>
+                  <option value="female">মহিলা</option>
+                  <option value="other">অন্যান্য</option>
+                </select>
+              </Field>
+              <Field label="মোবাইল নম্বর" required error={errors.mobile}>
+                <input style={inputStyle(errors.mobile)} value={form.mobile} onChange={set("mobile")} placeholder="০১XXXXXXXXX" type="tel" />
+              </Field>
+            </div>
+            <Field label="বর্তমান ঠিকানা">
+              <textarea style={{ ...inputStyle(), height: 72, resize: "vertical" }} value={form.currentAddress} onChange={set("currentAddress")} placeholder="বিস্তারিত ঠিকানা" />
+            </Field>
+            <Field label="স্থায়ী ঠিকানা">
+              <textarea style={{ ...inputStyle(), height: 72, resize: "vertical" }} value={form.permanentAddress} onChange={set("permanentAddress")} placeholder="বিস্তারিত ঠিকানা" />
+            </Field>
+          </div>
+
+          {/* Academic Info */}
+          <div style={{ padding: "32px 36px", borderBottom: "1px solid #f0fdf4", background: "#fafffe" }} className="form-section">
+            <h2 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1.15rem", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ background: "#166534", color: "white", borderRadius: 8, padding: "4px 12px", fontSize: "0.8rem" }}>২</span>
+              একাডেমিক তথ্য
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }} className="form-grid">
+              <Field label="বর্তমান/সর্বশেষ শ্রেণি">
+                <input style={inputStyle()} value={form.currentClass} onChange={set("currentClass")} placeholder="যেমন: একাদশ শ্রেণি" />
+              </Field>
+              <Field label="শিক্ষা প্রতিষ্ঠান">
+                <input style={inputStyle()} value={form.institution} onChange={set("institution")} placeholder="বিদ্যালয়/কলেজের নাম" />
+              </Field>
+              <Field label="সর্বশেষ পরীক্ষা">
+                <input style={inputStyle()} value={form.lastExam} onChange={set("lastExam")} placeholder="যেমন: JSC, SSC, HSC" />
+              </Field>
+              <Field label="GPA/ফলাফল">
+                <input style={inputStyle()} value={form.gpa} onChange={set("gpa")} placeholder="যেমন: GPA-5.00" />
+              </Field>
+              <Field label="কোন ব্যাচে ভর্তি হতে চান" required error={errors.batch}>
+                <select style={inputStyle(errors.batch)} value={form.batch} onChange={set("batch")}>
+                  <option value="">ব্যাচ নির্বাচন করুন</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.name}>{c.name} — {c.timing}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </div>
+
+          {/* Guardian Info */}
+          <div style={{ padding: "32px 36px", borderBottom: "1px solid #f0fdf4" }} className="form-section">
+            <h2 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1.15rem", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ background: "#166534", color: "white", borderRadius: 8, padding: "4px 12px", fontSize: "0.8rem" }}>৩</span>
+              অভিভাবকের তথ্য
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }} className="form-grid">
+              <Field label="অভিভাবকের নাম">
+                <input style={inputStyle()} value={form.guardianName} onChange={set("guardianName")} placeholder="অভিভাবকের নাম" />
+              </Field>
+              <Field label="সম্পর্ক">
+                <select style={inputStyle()} value={form.guardianRelation} onChange={set("guardianRelation")}>
+                  <option value="">নির্বাচন করুন</option>
+                  <option value="father">পিতা</option>
+                  <option value="mother">মাতা</option>
+                  <option value="sibling">ভাই/বোন</option>
+                  <option value="other">অন্যান্য</option>
+                </select>
+              </Field>
+              <Field label="মোবাইল নম্বর" required error={errors.guardianMobile}>
+                <input style={inputStyle(errors.guardianMobile)} value={form.guardianMobile} onChange={set("guardianMobile")} placeholder="০১XXXXXXXXX" type="tel" />
+              </Field>
+              <Field label="পেশা">
+                <input style={inputStyle()} value={form.guardianOccupation} onChange={set("guardianOccupation")} placeholder="যেমন: ব্যবসায়ী, চাকরিজীবী" />
+              </Field>
+            </div>
+          </div>
+
+          {/* Additional Info */}
+          <div style={{ padding: "32px 36px" }} className="form-section">
+            <h2 style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "1.15rem", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ background: "#166534", color: "white", borderRadius: 8, padding: "4px 12px", fontSize: "0.8rem" }}>৪</span>
+              অতিরিক্ত তথ্য
+            </h2>
+            <Field label="Commerce Unique Home সম্পর্কে কোথা থেকে জেনেছেন?">
+              <select style={inputStyle()} value={form.referralSource} onChange={set("referralSource")}>
+                <option value="">নির্বাচন করুন</option>
+                {sourceOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+            <Field label="বিশেষ কোনো তথ্য বা মন্তব্য">
+              <textarea style={{ ...inputStyle(), height: 100, resize: "vertical" }} value={form.comments} onChange={set("comments")} placeholder="কোনো বিশেষ তথ্য থাকলে লিখুন..." />
+            </Field>
+          </div>
+
+          {/* Submit */}
+          <div style={{ padding: "24px 36px", background: "#f0fdf4", borderTop: "1px solid #dcfce7" }}>
+            {submitError && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", color: "#dc2626", fontSize: "0.88rem", marginBottom: 16 }}>
+                ⚠️ {submitError}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="submit" className="btn-primary" style={{ fontSize: "1rem", padding: "12px 36px", opacity: submitting ? 0.7 : 1 }} disabled={submitting}>
+                {submitting ? "জমা হচ্ছে…" : "আবেদন জমা দিন →"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <style>{`
+        @media(max-width:640px){
+          .form-section{padding:20px 16px!important;}
+          .form-grid{grid-template-columns:1fr!important;}
+        }
+      `}</style>
+    </div>
+  );
+}

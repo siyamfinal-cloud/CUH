@@ -1,0 +1,301 @@
+import { useRef, useState, useEffect } from "react";
+import { useApp } from "../context/AppContext";
+
+function useCountUp(target: number, duration = 1800, started: boolean) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!started) return;
+    let start = 0;
+    const increment = target / (duration / 16);
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(start));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [started, target, duration]);
+  return count;
+}
+
+export default function SuccessRate() {
+  const { stats, successStories } = useApp();
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [filter, setFilter] = useState("সব");
+  const [visibleCount, setVisibleCount] = useState(4);
+  const [currentIndex, setCurrentIndex] = useState(4);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const carouselGap = 20;
+  const [slideStep, setSlideStep] = useState(0);
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.2 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const container = carouselRef.current;
+    if (!container) return;
+
+    const updateMeasurements = () => {
+      const width = container.clientWidth;
+
+      // Use the carousel's actual viewport width instead of window.innerWidth.
+      // This is important when the page is inside a narrower laptop/tablet
+      // layout, browser zoom, or another responsive container.
+      const nextCount = width <= 640 ? 1 : width <= 1024 ? 2 : 4;
+
+      if (nextCount !== visibleCount) {
+        setVisibleCount(nextCount);
+        setCurrentIndex(nextCount);
+        setIsTransitioning(false);
+      }
+
+      if (width > 0) {
+        // Width of one card + the gap after it. This is the exact distance
+        // the track must move for one slide at the current breakpoint.
+        const step = (width - carouselGap * (nextCount - 1)) / nextCount + carouselGap;
+        setSlideStep(step);
+      } else {
+        setSlideStep(0);
+      }
+    };
+
+    updateMeasurements();
+    const observer = new ResizeObserver(updateMeasurements);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [visibleCount]);
+
+  useEffect(() => {
+    setIsTransitioning(false);
+    setCurrentIndex(visibleCount);
+    const frame = requestAnimationFrame(() => setIsTransitioning(true));
+    return () => cancelAnimationFrame(frame);
+  }, [filter, visibleCount]);
+
+  const sr = useCountUp(parseInt(stats.successRate) || 95, 1600, visible);
+  const ts = useCountUp(parseInt(stats.totalStudents) || 500, 1800, visible);
+  const ap = useCountUp(parseInt(stats.aPlus) || 100, 1600, visible);
+  const tc = useCountUp(parseInt(stats.teachers) || 15, 1200, visible);
+
+  const exams = ["সব", ...Array.from(new Set(successStories.map(s => s.exam)))];
+  const filtered = filter === "সব" ? successStories : successStories.filter(s => s.exam === filter);
+  const canCarousel = filtered.length > visibleCount;
+  const extendedStories = canCarousel
+    ? [
+        ...filtered.slice(-visibleCount),
+        ...filtered,
+        ...filtered.slice(0, visibleCount),
+      ]
+    : filtered;
+
+  useEffect(() => {
+    if (!canCarousel) return;
+    const timer = window.setInterval(() => {
+      setCurrentIndex(index => index + 1);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [canCarousel, filtered.length, visibleCount]);
+
+  useEffect(() => {
+    if (!canCarousel) return;
+    if (currentIndex < filtered.length + visibleCount) return;
+
+    // After the final cloned slide finishes, jump back to the first real
+    // slide without animation. Using the measured slide step means this
+    // reset works consistently at every breakpoint.
+    const timeout = window.setTimeout(() => {
+      setIsTransitioning(false);
+      setCurrentIndex(visibleCount);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setIsTransitioning(true));
+      });
+    }, 650);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentIndex, filtered.length, visibleCount, canCarousel]);
+
+  return (
+    <div style={{ paddingTop: 64 }}>
+      {/* Header */}
+      <div style={{ background: "linear-gradient(135deg, #14532d, #166534)", padding: "64px 20px 80px", position: "relative", overflow: "hidden" }}>
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "radial-gradient(circle at 70% 50%, rgba(22,163,74,0.3) 0%, transparent 60%)",
+        }} />
+        <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center", position: "relative" }}>
+          <span style={{ display: "inline-block", background: "rgba(187,247,208,0.2)", color: "#86efac", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 14 }}>
+            আমাদের গর্ব
+          </span>
+          <h1 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.8rem, 5vw, 2.8rem)", color: "white", fontWeight: 700, marginBottom: 16 }}>
+            আমাদের সাফল্য
+          </h1>
+          <p style={{ color: "#a7f3d0", fontSize: "0.95rem", lineHeight: 1.8 }}>
+            প্রতি বছর শত শত শিক্ষার্থী আমাদের কাছ থেকে শিক্ষা নিয়ে উজ্জ্বল ভবিষ্যৎ গড়ে তুলছে।
+          </p>
+        </div>
+      </div>
+
+      {/* Animated Stats */}
+      <section ref={ref} style={{ background: "white", padding: "64px 20px" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 24 }} className="stats-grid">
+          {[
+            { value: sr + "%", label: "সাফল্যের হার", icon: "🏆", desc: "প্রতি বছর ধারাবাহিকভাবে" },
+            { value: ts + "+", label: "সফল শিক্ষার্থী", icon: "👩‍🎓", desc: "এ পর্যন্ত মোট" },
+            { value: ap + "+", label: "A+ / GPA-5", icon: "⭐", desc: "সর্বোচ্চ ফলাফল অর্জন" },
+            { value: tc + "+", label: "অভিজ্ঞ শিক্ষক", icon: "👨‍🏫", desc: "বিশেষজ্ঞ দল" },
+          ].map(s => (
+            <div key={s.label} className="stat-card card-hover">
+              <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>{s.icon}</div>
+              <div style={{ fontFamily: "Lora, serif", fontSize: "clamp(2rem, 5vw, 3rem)", fontWeight: 700, color: "#166534", lineHeight: 1 }}>
+                {s.value}
+              </div>
+              <div style={{ fontWeight: 700, color: "#14532d", fontSize: "1rem", marginTop: 8, marginBottom: 6 }}>{s.label}</div>
+              <div style={{ color: "#9ca3af", fontSize: "0.78rem" }}>{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Progress Bars */}
+      <section style={{ background: "#f0fdf4", padding: "64px 20px" }}>
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          <h2 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.4rem, 3vw, 2rem)", color: "#14532d", fontWeight: 700, marginBottom: 40, textAlign: "center" }}>
+            আমাদের বিগত বছরের সাফল্যের হার
+          </h2>
+          {[
+            { subject: "HSC 2025", percent: 100 },
+            { subject: "HSC 2024", percent: 100 },
+            { subject: "HSC 2023", percent: 100 },
+            { subject: "HSC 2022", percent: 100 },
+            { subject: "HSC 2021", percent: 100 },
+          ].map(item => (
+            <div key={item.subject} style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontWeight: 600, color: "#14532d", fontSize: "0.9rem" }}>{item.subject}</span>
+                <span style={{ fontWeight: 700, color: "#166534", fontSize: "0.9rem" }}>{item.percent}%</span>
+              </div>
+              <div style={{ height: 10, background: "#dcfce7", borderRadius: 100, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: visible ? `${item.percent}%` : "0%",
+                  background: "linear-gradient(90deg, #166534, #22c55e)",
+                  borderRadius: 100,
+                  transition: "width 1.5s ease",
+                }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Success Stories */}
+      <section style={{ padding: "80px 20px", background: "white" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <span style={{ display: "inline-block", background: "#dcfce7", color: "#166534", fontSize: "0.8rem", fontWeight: 600, padding: "4px 14px", borderRadius: 100, marginBottom: 14 }}>শিক্ষার্থীদের কথা</span>
+            <h2 style={{ fontFamily: "Lora, serif", fontSize: "clamp(1.4rem, 3vw, 2rem)", color: "#14532d", fontWeight: 700 }}>
+              সাফল্যের গল্প
+            </h2>
+          </div>
+
+          {/* Filter */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 40 }}>
+            {exams.map(e => (
+              <button
+                key={e}
+                onClick={() => setFilter(e)}
+                style={{
+                  padding: "7px 18px",
+                  borderRadius: 100,
+                  border: "1.5px solid",
+                  borderColor: filter === e ? "#166534" : "#dcfce7",
+                  background: filter === e ? "#166534" : "white",
+                  color: filter === e ? "white" : "#374151",
+                  fontWeight: 600,
+                  fontSize: "0.84rem",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s",
+                }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+
+          <div
+            ref={carouselRef}
+            style={{
+              overflow: "hidden",
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: carouselGap,
+                transform: canCarousel && slideStep
+                  ? `translate3d(-${currentIndex * slideStep}px, 0, 0)`
+                  : "translate3d(0, 0, 0)",
+                transition: isTransitioning ? "transform 650ms ease" : "none",
+                willChange: canCarousel ? "transform" : "auto",
+              }}
+            >
+              {extendedStories.map((s, index) => (
+                <div
+                  key={`${s.id}-${index}`}
+                  className="card-hover story-slide"
+                  style={{
+                    flex: `0 0 calc((100% - ${carouselGap * (visibleCount - 1)}px) / ${visibleCount})`,
+                    minWidth: 0,
+                    background: "white",
+                    border: "1.5px solid #dcfce7",
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    boxShadow: "0 4px 16px rgba(22,101,52,0.06)",
+                  }}
+                >
+                  <div style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)", padding: "24px", textAlign: "center" }}>
+                    <img
+                      src={s.photo || "https://placehold.co/72x72/dcfce7/166534?text=S"}
+                      alt={s.name}
+                      loading="lazy"
+                      style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: "3px solid white", boxShadow: "0 4px 12px rgba(22,101,52,0.15)", marginBottom: 12 }}
+                    />
+                    <div style={{ fontFamily: "Lora, serif", fontWeight: 700, color: "#14532d", fontSize: "0.95rem" }}>{s.name}</div>
+                    <div style={{ background: "#166534", color: "white", display: "inline-block", padding: "2px 10px", borderRadius: 100, fontSize: "0.75rem", fontWeight: 700, marginTop: 6 }}>
+                      {s.result}
+                    </div>
+                  </div>
+                  <div style={{ padding: "16px" }}>
+                    <div style={{ color: "#6b7280", fontSize: "0.78rem", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                      <span>{s.exam}</span>
+                      <span>{s.batch}</span>
+                    </div>
+                    <div style={{ color: "#374151", fontSize: "0.8rem", marginBottom: 10, fontWeight: 500 }}>{s.institution}</div>
+                    <p style={{
+                      color: "#6b7280", fontSize: "0.8rem", lineHeight: 1.7,
+                      fontStyle: "italic", borderLeft: "2px solid #dcfce7", paddingLeft: 10,
+                      margin: 0,
+                    }}>
+                      "{s.testimonial}"
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <style>{`
+        @media(max-width:640px){.stats-grid{grid-template-columns:repeat(2,1fr)!important;}}
+      `}</style>
+    </div>
+  );
+}

@@ -1,0 +1,57 @@
+import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { AppProvider } from "./context/AppContext";
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+import Home from "./pages/Home";
+import About from "./pages/About";
+import AdmissionDetails from "./pages/AdmissionDetails";
+import AdmissionForm from "./pages/AdmissionForm";
+import Teachers from "./pages/Teachers";
+import SuccessRate from "./pages/SuccessRate";
+import Gallery from "./pages/Gallery";
+import Notice from "./pages/Notice";
+import Contact from "./pages/Contact";
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [pathname]);
+  return null;
+}
+
+function PublicLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Navbar />
+      <main>{children}</main>
+      <Footer />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <AppProvider>
+      <HashRouter>
+        <ScrollToTop />
+        <Routes>
+          <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
+          <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
+          <Route path="/admission" element={<PublicLayout><AdmissionDetails /></PublicLayout>} />
+          <Route path="/admission-form" element={<PublicLayout><AdmissionForm /></PublicLayout>} />
+          <Route path="/teachers" element={<PublicLayout><Teachers /></PublicLayout>} />
+          <Route path="/success" element={<PublicLayout><SuccessRate /></PublicLayout>} />
+          <Route path="/gallery" element={<PublicLayout><Gallery /></PublicLayout>} />
+          <Route path="/notice" element={<PublicLayout><Notice /></PublicLayout>} />
+          <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        </Routes>
+      </HashRouter>
+    </AppProvider>
+  );
+}

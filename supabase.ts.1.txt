@@ -1,0 +1,234 @@
+import { createClient } from "@supabase/supabase-js";
+import { projectId, publicAnonKey } from "../../utils/supabase/info";
+
+// In Figma Make's preview iframe, localStorage may be sandboxed (throws or
+// silently drops writes). Verify both write and read-back before trusting it;
+// fall back to in-memory storage so createClient never crashes.
+function safeStorage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> {
+  try {
+    const testKey = "__cuh_storage_test__";
+    const testVal = "cuh_ok";
+    localStorage.setItem(testKey, testVal);
+    const readBack = localStorage.getItem(testKey);
+    localStorage.removeItem(testKey);
+    if (readBack === testVal) return localStorage;
+  } catch {
+    // fall through
+  }
+  // in-memory fallback — singleton so module re-imports share the same store
+  const mem: Record<string, string> = {};
+  return {
+    getItem: (k) => mem[k] ?? null,
+    setItem: (k, v) => { mem[k] = v; },
+    removeItem: (k) => { delete mem[k]; },
+  };
+}
+
+export const supabase = createClient(
+  `https://${projectId}.supabase.co`,
+  publicAnonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      // Unique key prevents collision with Figma Make's own Supabase client
+      // (which also connects to the same project), eliminating the
+      // "Multiple GoTrueClient instances" warning and auth state interference.
+      storageKey: "cuh-supabase-auth",
+      storage: safeStorage(),
+    },
+  }
+);
+
+// Bucket that exists in this Supabase project for teacher/stories photos
+export const TEACHER_BUCKET = "teacher-images";
+
+// Bucket for gallery images
+export const GALLERY_BUCKET = "gallery-images";
+
+// Upload a file to Supabase Storage and return its public URL.
+// Works in both normal and Incognito sessions.
+export async function uploadPhoto(
+  file: File,
+  folder: string,
+  bucket: string
+): Promise<{ url: string | null; error: string | null }> {
+
+  // ── 1. Verify authenticated session ───────────────────────────────────────
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+  console.info(
+    "[uploadPhoto] project:", projectId,
+    "| bucket:", bucket,
+    "| user:", session?.user?.id ?? "none",
+    "| token-prefix:", session?.access_token?.slice(0, 20) ?? "none",
+    "| session-error:", sessionError?.message ?? "none",
+  );
+
+  if (sessionError || !session) {
+    return {
+      url: null,
+      error: "ফাইল আপলোড করতে লগইন করুন। অ্যাডমিন প্যানেলে প্রবেশ করুন এবং পুনরায় চেষ্টা করুন।",
+    };
+  }
+
+  // ── 2. Refresh session to guarantee a fresh JWT is set on the client ───────
+  // supabase-js propagates the refreshed token to Storage automatically via
+  // the shared GoTrueClient reference — no need to pass the token manually.
+  const { data: { session: refreshed }, error: refreshError } =
+    await supabase.auth.refreshSession();
+
+  if (refreshError) {
+    console.warn("[uploadPhoto] session refresh warning:", refreshError.message);
+    // Do NOT abort — the existing session's access_token may still be valid.
+  } else {
+    console.info("[uploadPhoto] session refreshed | user:", refreshed?.user?.id ?? "none");
+  }
+
+  // ── 3. Upload ─────────────────────────────────────────────────────────────
+  // NOTE: getBucket() is a service_role-only management API and will always
+  // return "Bucket not found" for regular authenticated users — do not call it.
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  const { data, error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/octet-stream",
+    });
+
+  if (uploadError) {
+    console.error("[uploadPhoto] upload error:", uploadError.message, "| status:", (uploadError as { statusCode?: string }).statusCode);
+    return { url: null, error: uploadError.message };
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(data.path);
+
+  console.info("[uploadPhoto] success | publicUrl:", publicUrl);
+  return { url: publicUrl, error: null };
+}
+
+// Row → frontend type transformers
+export function rowToTeacher(r: Record<string, unknown>) {
+  // Prefer photo_url; fall back to image_url (older column name); then placeholder.
+  const photoUrl: string =
+    (r.photo_url ? String(r.photo_url).trim() : "") ||
+    (r.image_url ? String(r.image_url).trim() : "") ||
+    "https://placehold.co/200x200/dcfce7/166534?text=T";
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    designation: String(r.designation ?? ""),
+    subject: String(r.subject ?? ""),
+    qualification: String(r.qualification ?? ""),
+    experience: String(r.experience ?? ""),
+    bio: String(r.bio ?? ""),
+    photo: photoUrl,
+    serialNumber: r.serial_number != null ? Number(r.serial_number) : null,
+  };
+}
+
+export function rowToNotice(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    title: String(r.title ?? ""),
+    content: String(r.content ?? ""),
+    date: String(r.date ?? ""),
+    important: Boolean(r.important),
+  };
+}
+
+export function rowToStory(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    institution: String(r.institution ?? ""),
+    exam: String(r.exam ?? ""),
+    result: String(r.result ?? ""),
+    batch: String(r.batch ?? ""),
+    testimonial: String(r.testimonial ?? ""),
+    photo: String(r.photo_url ?? ""),
+  };
+}
+
+export function rowToCourse(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    classes: String(r.classes ?? ""),
+    schedule: String(r.schedule ?? ""),
+    admissionFee: String(r.admission_fee ?? ""),
+    monthlyFee: String(r.monthly_fee ?? ""),
+    term: String(r.term ?? ""),
+    startDate: String(r.start_date ?? ""),
+    timing: String(r.timing ?? ""),
+  };
+}
+
+export function rowToGallery(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    url: String(r.url ?? ""),
+    caption: String(r.caption ?? ""),
+    category: String(r.category ?? ""),
+  };
+}
+
+export function rowToApplication(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    refNumber: String(r.ref_number ?? ""),
+    submittedAt: r.submitted_at
+      ? new Date(String(r.submitted_at)).toLocaleDateString("bn-BD")
+      : "",
+    status: String(r.status ?? "pending") as "pending" | "contacted" | "confirmed" | "rejected",
+    studentName: String(r.student_name ?? ""),
+    fatherName: String(r.father_name ?? ""),
+    motherName: String(r.mother_name ?? ""),
+    dob: String(r.dob ?? ""),
+    gender: String(r.gender ?? ""),
+    mobile: String(r.mobile ?? ""),
+    currentAddress: String(r.current_address ?? ""),
+    permanentAddress: String(r.permanent_address ?? ""),
+    currentClass: String(r.current_class ?? ""),
+    institution: String(r.institution ?? ""),
+    lastExam: String(r.last_exam ?? ""),
+    gpa: String(r.gpa ?? ""),
+    batch: String(r.batch ?? ""),
+    guardianName: String(r.guardian_name ?? ""),
+    guardianRelation: String(r.guardian_relation ?? ""),
+    guardianMobile: String(r.guardian_mobile ?? ""),
+    guardianOccupation: String(r.guardian_occupation ?? ""),
+    referralSource: String(r.referral_source ?? ""),
+    comments: String(r.comments ?? ""),
+    photo: String(r.photo_url ?? ""),
+  };
+}
+
+export function rowToSettings(r: Record<string, unknown>) {
+  return {
+    mapEmbedUrl: String(r.map_embed_url ?? ""),
+    address: String(r.address ?? ""),
+    phone: String(r.phone ?? ""),
+    whatsapp: String(r.whatsapp ?? ""),
+    email: String(r.email ?? ""),
+    facebook: String(r.facebook ?? ""),
+    openingHours: String(r.opening_hours ?? ""),
+    institutionHeroImageUrl: String(r.institution_hero_image_url ?? ""),
+    homeHeroImageUrl: String(r.home_hero_image_url ?? ""),
+    homeAdmissionText: String(r.home_admission_text ?? ""),
+  };
+}
+
+export function rowToStats(r: Record<string, unknown>) {
+  return {
+    successRate: String(r.success_rate ?? "95"),
+    totalStudents: String(r.total_students ?? "500"),
+    aPlus: String(r.a_plus ?? "100"),
+    teachers: String(r.teachers_count ?? "15"),
+  };
+}
